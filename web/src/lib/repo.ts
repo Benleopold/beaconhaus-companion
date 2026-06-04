@@ -133,3 +133,15 @@ export async function saveCapture(input: Partial<Capture> & { title: string }): 
   return id;
 }
 export const deleteCapture = (id: string) => db.captures.delete(id);
+
+// Reset --------------------------------------------------------------------
+/** Wipe all local data and re-seed the starting circle from the rulebook. */
+export async function resetAll(): Promise<void> {
+  await db.transaction("rw", db.people, db.facilities, db.captures, db.profile, async () => {
+    await db.people.clear();
+    await db.facilities.clear();
+    await db.captures.clear();
+    await db.profile.clear();
+  });
+  await ensureSeeded();
+}

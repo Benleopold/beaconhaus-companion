@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { ExternalLink, Mail } from "lucide-react";
 import { Avatar, WarmthDot } from "@/components/ui";
 import { computeWarmth } from "@/lib/warmth";
-import { mailtoHref, linkedInHref } from "@/lib/links";
+import { composeEmailHref, linkedInHref } from "@/lib/links";
 import { cn, gentleSince } from "@/lib/utils";
 import { vocab } from "@/lib/rulebook.generated";
 import type { Person } from "@/lib/types";
@@ -65,7 +65,9 @@ export function PersonCard({
 
         <div className="flex shrink-0 items-center gap-0.5" onClick={stop}>
           <a
-            href={mailtoHref(person)}
+            href={composeEmailHref(person)}
+            target="_blank"
+            rel="noopener noreferrer"
             onClick={stop}
             aria-label={`Email ${person.fullName}`}
             className={cn(quickAction, "hover:text-beacon-deep")}

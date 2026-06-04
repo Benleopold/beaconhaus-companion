@@ -8,11 +8,12 @@ import {
   Cloud,
   HeartHandshake,
   Lock,
+  RotateCcw,
   ShieldCheck,
 } from "lucide-react";
 import { Button, Card, Field, Input, SectionLabel } from "@/components/ui";
 import { useProfile } from "@/lib/hooks";
-import { updateProfile } from "@/lib/repo";
+import { resetAll, updateProfile } from "@/lib/repo";
 import { governance, profile as profileSeed } from "@/lib/rulebook.generated";
 import { cn } from "@/lib/utils";
 import type { Profile } from "@/lib/types";
@@ -53,6 +54,8 @@ export default function SettingsPage() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   // Seed local state once the profile arrives.
   useEffect(() => {
@@ -89,6 +92,18 @@ export default function SettingsPage() {
       setSaved(true);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const onReset = async () => {
+    if (resetting) return;
+    setResetting(true);
+    try {
+      await resetAll();
+      setDraft(null); // re-seed the form from the fresh profile
+      setConfirmReset(false);
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -247,6 +262,28 @@ export default function SettingsPage() {
                 Connect Google Drive
               </Button>
             </div>
+          </div>
+
+          <div className="mt-4 border-t border-line-soft pt-4">
+            <p className="mb-2.5 text-[13px] leading-relaxed text-ink-faint">
+              Clear everything on this device and return to the starting circle.
+            </p>
+            {confirmReset ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button variant="soft" onClick={onReset} disabled={resetting}>
+                  <RotateCcw className="h-4 w-4" />
+                  {resetting ? "Clearing" : "Yes, start fresh"}
+                </Button>
+                <Button variant="ghost" onClick={() => setConfirmReset(false)} disabled={resetting}>
+                  Keep my data
+                </Button>
+              </div>
+            ) : (
+              <Button variant="ghost" onClick={() => setConfirmReset(true)} className="text-ink-soft">
+                <RotateCcw className="h-4 w-4" />
+                Start fresh
+              </Button>
+            )}
           </div>
         </Card>
       </section>

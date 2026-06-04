@@ -7,7 +7,7 @@ import { useMemo, useState } from "react";
 
 import { Avatar, Button, EmptyState, WarmthPill } from "@/components/ui";
 import { useProfile, useTodayQueue } from "@/lib/hooks";
-import { linkedInHref, mailtoHref } from "@/lib/links";
+import { composeEmailHref, linkedInHref } from "@/lib/links";
 import { logHello } from "@/lib/repo";
 import { profile as profileDefaults, vocab } from "@/lib/rulebook.generated";
 import type { Person } from "@/lib/types";
@@ -238,7 +238,7 @@ function FocalCard({
 
         {/* Secondary actions */}
         <div className="mt-3 flex w-full max-w-xs items-center justify-center gap-2">
-          <a href={mailtoHref(person)} className="flex-1">
+          <a href={composeEmailHref(person)} target="_blank" rel="noopener noreferrer" className="flex-1">
             <Button variant="soft" className="w-full">
               <Mail className="h-[17px] w-[17px]" />
               Email

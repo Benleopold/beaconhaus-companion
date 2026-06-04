@@ -1,5 +1,5 @@
 "use client";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { Feather, MapPin, Settings, Sunrise, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -98,17 +98,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         <main className="flex-1 px-5 pb-32 md:px-10 md:py-12">
           <div className="mx-auto w-full max-w-xl md:max-w-2xl">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={pathname}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
-              >
-                {children}
-              </motion.div>
-            </AnimatePresence>
+            {/* Keyed fade-in only. No AnimatePresence / exit, so client-side
+                navigation can never get stuck waiting on an exit animation. */}
+            <motion.div
+              key={pathname}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+            >
+              {children}
+            </motion.div>
           </div>
         </main>
       </div>

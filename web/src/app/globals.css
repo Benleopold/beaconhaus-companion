@@ -1,0 +1,109 @@
+@import "tailwindcss";
+
+/* ===========================================================================
+   BeaconHaus design system. Warm, calm, illuminating. Candlelight, not screens.
+   "Illuminating Life, Legacy, and Love."
+   =========================================================================== */
+@theme {
+  /* Surfaces - warm paper and ivory */
+  --color-canvas: #faf5ec;
+  --color-canvas-deep: #f3ead9;
+  --color-surface: #fffdf9;
+  --color-surface-2: #f7efe1;
+
+  /* Ink - warm charcoal */
+  --color-ink: #2b2520;
+  --color-ink-soft: #6c6155;
+  --color-ink-faint: #a99c8a;
+  --color-line: #ece1cf;
+  --color-line-soft: #f3ebdd;
+
+  /* Beacon - the signature warm light */
+  --color-beacon: #e0a23c;
+  --color-beacon-deep: #c98423;
+  --color-ember: #d9794a;
+  --color-glow: #f7d491;
+
+  /* Warmth states - a light metaphor, never an alarm (R5: no guilt) */
+  --color-warm: #d99a2e;
+  --color-warm-soft: #f6e6c2;
+  --color-cooling: #c79170;
+  --color-cooling-soft: #f0e2d6;
+  --color-ready: #93a7b3;
+  --color-ready-soft: #e6ecf0;
+
+  /* Supporting */
+  --color-sage: #7f9778;
+  --color-sage-soft: #e6ede2;
+
+  --font-display: var(--font-fraunces), "Georgia", serif;
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+
+  --radius-xl: 1.25rem;
+  --radius-2xl: 1.75rem;
+  --radius-3xl: 2.25rem;
+
+  --shadow-soft: 0 1px 2px rgba(70, 54, 33, 0.04), 0 8px 24px -12px rgba(70, 54, 33, 0.14);
+  --shadow-lift: 0 2px 6px rgba(70, 54, 33, 0.06), 0 24px 48px -20px rgba(70, 54, 33, 0.22);
+  --shadow-beacon: 0 10px 40px -8px rgba(224, 162, 60, 0.45);
+}
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    background-color: var(--color-canvas);
+    background-image:
+      radial-gradient(120% 70% at 50% -10%, rgba(247, 212, 145, 0.35) 0%, rgba(247, 212, 145, 0) 55%),
+      radial-gradient(80% 50% at 100% 0%, rgba(217, 121, 74, 0.08) 0%, rgba(217, 121, 74, 0) 50%);
+    background-attachment: fixed;
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  ::selection {
+    background: var(--color-glow);
+    color: var(--color-ink);
+  }
+  h1, h2, h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+  }
+  /* Hide scrollbars on the calm horizontal rails */
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+}
+
+@layer components {
+  .card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-2xl);
+    box-shadow: var(--shadow-soft);
+  }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.25rem 0.7rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  /* The beacon: a soft glowing flame mark */
+  .beacon {
+    background: radial-gradient(circle at 50% 35%, var(--color-glow), var(--color-beacon) 55%, var(--color-beacon-deep));
+    box-shadow: var(--shadow-beacon);
+  }
+  .focus-ring:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--color-canvas), 0 0 0 5px var(--color-beacon);
+  }
+}

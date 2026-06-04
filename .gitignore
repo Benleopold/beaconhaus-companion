@@ -21,3 +21,7 @@ postgres/quota-report.json
 # App shell (added when the PWA is built)
 .next/
 dist/
+
+# Local test artifacts (Playwright screenshots / snapshots)
+.playwright-mcp/
+/*.png

@@ -1,0 +1,24 @@
+{
+  "ShowHidden": false,
+  "ShowAllFiles": false,
+  "CurrentPath": null,
+  "SSoTmeProjectFiles": null,
+  "SSoTmeProjectId": "ea479252-7508-4ac1-bc9e-0cc732d9d489",
+  "Name": "BeaconHaus",
+  "ProjectSettings": [
+    {
+      "Name": "project-name",
+      "Value": "BeaconHaus"
+    }
+  ],
+  "ProjectTranspilers": [
+    {
+      "IsSSoTTranspiler": false,
+      "Name": "rulebooktopostgres",
+      "RelativePath": "/postgres",
+      "CommandLine": "rulebook-to-postgres -i ../effortless-rulebook/effortless-rulebook.json",
+      "IsDisabled": false,
+      "PinnedVersion": "v2026.05.09.1738"
+    }
+  ]
+}

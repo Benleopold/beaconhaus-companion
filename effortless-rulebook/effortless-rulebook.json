@@ -1,0 +1,356 @@
+{
+  "$schema": "https://example.com/cmcc-schema/v1",
+  "Name": "BeaconHaus Companion",
+  "Description": "Rulebook (single source of truth) for the BeaconHaus Companion. Hand-authored from README.md, beaconhaus_schema.sql, and BeaconHaus_Companion_Architecture.md. The Supabase tables, RLS policies, controlled vocabularies, and frontend config are derivative outputs generated from this hub. Change meaning here, then run effortless build.",
+
+  "Profiles": {
+    "Description": "Per-user settings, one row per user. Holds the gentle parameters that drive the daily ritual. This is the ownership root: every owned row points back here through its Owner relationship.",
+    "schema": [
+      { "name": "Name", "datatype": "string", "type": "calculated", "nullable": false, "Description": "Logical key for the profile, a slug of the account key. Maps to the per-user identity in the substrate.", "formula": "=SUBSTITUTE(LOWER({{AccountKey}}), \" \", \"-\")" },
+      { "name": "AccountKey", "datatype": "string", "type": "raw", "nullable": false, "Description": "Stable per-user identity key. Maps to user_id in the generated schema. Owned rows reference this value through their Owner relationship." },
+      { "name": "DisplayName", "datatype": "string", "type": "raw", "nullable": true, "Description": "Friendly display name shown in the app. Default Liz. Maps to profile.display_name." },
+      { "name": "Tagline", "datatype": "string", "type": "raw", "nullable": true, "Description": "Personal tagline. Default Illuminating Life, Legacy, and Love. Maps to profile.tagline." },
+      { "name": "WeeklyWarmupGoal", "datatype": "integer", "type": "raw", "nullable": true, "Description": "Target number of hellos per week, shown as encouragement, never a backlog. Default 4. Maps to profile.weekly_warmup_goal. See GovernanceRules R4." },
+      { "name": "WarmThresholdDays", "datatype": "integer", "type": "raw", "nullable": true, "Description": "A person stays Warm within this many days of the last hello. Default 14. Maps to profile.warm_threshold_days. See GovernanceRules R2." },
+      { "name": "CoolingThresholdDays", "datatype": "integer", "type": "raw", "nullable": true, "Description": "A person is Cooling up to this many days since the last hello, then Cold beyond it. Default 30. Maps to profile.cooling_threshold_days. See GovernanceRules R2." },
+      { "name": "MorningWarmupCount", "datatype": "integer", "type": "raw", "nullable": true, "Description": "How many people the Today screen surfaces each morning, one at a time. Default 3. Maps to profile.morning_warmup_count. See GovernanceRules R3." },
+      { "name": "WeekStart", "datatype": "datetime", "type": "raw", "nullable": true, "Description": "Anchor for the weekly count, set to the most recent Monday. Maps to profile.week_start. See GovernanceRules R4." },
+      { "name": "WeekCount", "datatype": "integer", "type": "raw", "nullable": true, "Description": "Hellos logged since WeekStart, maintained by the app and reset each Monday. Default 0. Maps to profile.week_count." },
+      { "name": "People", "datatype": "string", "type": "relationship", "nullable": true, "Description": "The people owned by this profile.", "RelatedTo": "People" },
+      { "name": "Facilities", "datatype": "string", "type": "relationship", "nullable": true, "Description": "The facilities owned by this profile.", "RelatedTo": "Facilities" },
+      { "name": "Captures", "datatype": "string", "type": "relationship", "nullable": true, "Description": "The captures owned by this profile.", "RelatedTo": "Captures" },
+      { "name": "OAuthTokens", "datatype": "string", "type": "relationship", "nullable": true, "Description": "The server-side OAuth tokens owned by this profile.", "RelatedTo": "OAuthTokens" },
+      { "name": "CountOfPeople", "datatype": "integer", "type": "aggregation", "nullable": false, "Description": "Number of people in this profile's warm network.", "formula": "=COUNTIFS(People!{{Owner}}, Profiles!{{Name}})" },
+      { "name": "CountOfFacilities", "datatype": "integer", "type": "aggregation", "nullable": false, "Description": "Number of target facilities owned by this profile.", "formula": "=COUNTIFS(Facilities!{{Owner}}, Profiles!{{Name}})" },
+      { "name": "CountOfCaptures", "datatype": "integer", "type": "aggregation", "nullable": false, "Description": "Number of captures owned by this profile.", "formula": "=COUNTIFS(Captures!{{Owner}}, Profiles!{{Name}})" }
+    ],
+    "data": [
+      { "AccountKey": "liz", "DisplayName": "Liz", "Tagline": "Illuminating Life, Legacy, and Love", "WeeklyWarmupGoal": 4, "WarmThresholdDays": 14, "CoolingThresholdDays": 30, "MorningWarmupCount": 3, "WeekStart": null, "WeekCount": 0 }
+    ]
+  },
+
+  "People": {
+    "Description": "The warm network. Liz's sphere of influence and community ecosystem, anyone who can open a door or help map who is aligned.",
+    "schema": [
+      { "name": "Name", "datatype": "string", "type": "calculated", "nullable": false, "Description": "Logical key for the person, a slug of FullName.", "formula": "=SUBSTITUTE(LOWER({{FullName}}), \" \", \"-\")" },
+      { "name": "FullName", "datatype": "string", "type": "raw", "nullable": false, "Description": "The person's name. The only required field on a person. Maps to people.name. See GovernanceRules R6." },
+      { "name": "Owner", "datatype": "string", "type": "relationship", "nullable": false, "Description": "The profile that owns this row. Holds the Profiles Name. Drives Row Level Security. Maps to people.user_id. See GovernanceRules R1.", "RelatedTo": "Profiles" },
+      { "name": "RoleOrg", "datatype": "string", "type": "raw", "nullable": true, "Description": "The person's role or organization. Maps to people.role_org." },
+      { "name": "Sphere", "datatype": "string", "type": "relationship", "nullable": true, "Description": "Which sphere of the network this person belongs to. Holds the Spheres Name. Maps to people.sphere.", "RelatedTo": "Spheres" },
+      { "name": "Relationship", "datatype": "string", "type": "raw", "nullable": true, "Description": "How Liz knows this person, in her own words. Maps to people.relationship." },
+      { "name": "DoorsCanOpen", "datatype": "string", "type": "raw", "nullable": true, "Description": "What doors this person can open or who they can introduce. Maps to people.doors_can_open." },
+      { "name": "TheAsk", "datatype": "string", "type": "raw", "nullable": true, "Description": "The specific ask or next favor, kept human and light. Maps to people.the_ask." },
+      { "name": "Email", "datatype": "string", "type": "raw", "nullable": true, "Description": "Email address, used by the native email compose link. Maps to people.email." },
+      { "name": "Phone", "datatype": "string", "type": "raw", "nullable": true, "Description": "Phone number. Maps to people.phone." },
+      { "name": "LinkedinUrl", "datatype": "string", "type": "raw", "nullable": true, "Description": "LinkedIn profile URL, used only for Open in LinkedIn deep links. Maps to people.linkedin_url. See GovernanceRules R10." },
+      { "name": "Status", "datatype": "string", "type": "relationship", "nullable": true, "Description": "Where this relationship stands. Holds the PersonStatuses Name. Defaults to to-reach-out. Maps to people.status.", "RelatedTo": "PersonStatuses" },
+      { "name": "LastTouched", "datatype": "datetime", "type": "raw", "nullable": true, "Description": "Date of the most recent hello. Logging a hello sets this to today. Drives Warmth. Maps to people.last_touched. See GovernanceRules R2 and R3." },
+      { "name": "NextStep", "datatype": "string", "type": "raw", "nullable": true, "Description": "The gentle next step with this person. Maps to people.next_step." },
+      { "name": "Notes", "datatype": "string", "type": "raw", "nullable": true, "Description": "Free notes. Maps to people.notes." },
+      { "name": "WarmThresholdDays", "datatype": "integer", "type": "lookup", "nullable": false, "Description": "The owner's warm threshold in days, pulled from the owning profile. Falls back to 14 when the profile leaves it blank, so a missing threshold never silently turns every contact cold.", "formula": "=COALESCE(INDEX(Profiles!{{WarmThresholdDays}}, MATCH({{Owner}}, Profiles!{{Name}}, 0)), 14)" },
+      { "name": "CoolingThresholdDays", "datatype": "integer", "type": "lookup", "nullable": false, "Description": "The owner's cooling threshold in days, pulled from the owning profile. Falls back to 30 when the profile leaves it blank.", "formula": "=COALESCE(INDEX(Profiles!{{CoolingThresholdDays}}, MATCH({{Owner}}, Profiles!{{Name}}, 0)), 30)" },
+      { "name": "DaysSinceLastTouched", "datatype": "integer", "type": "calculated", "nullable": false, "Description": "Days since the last hello, or 0 when never touched. Time relative, resolved at view-compute time. ISBLANK guards the unset (NULL) date.", "formula": "=IF(ISBLANK({{LastTouched}}), 0, TODAY() - {{LastTouched}})" },
+      { "name": "IsNeverTouched", "datatype": "boolean", "type": "calculated", "nullable": false, "Description": "True when there is no recorded hello yet. A never touched contact reads as ready for a hello, never as overdue. See GovernanceRules R5.", "formula": "=IF(ISBLANK({{LastTouched}}), TRUE(), FALSE())" },
+      { "name": "Warmth", "datatype": "string", "type": "calculated", "nullable": false, "Description": "Derived warmth: warm within WarmThresholdDays, cooling up to CoolingThresholdDays, otherwise cold, including never touched. Matches a WarmthLevels Name. Drives sorting and the daily ritual only. See GovernanceRules R2.", "formula": "=IF(ISBLANK({{LastTouched}}), \"cold\", IF({{DaysSinceLastTouched}} <= {{WarmThresholdDays}}, \"warm\", IF({{DaysSinceLastTouched}} <= {{CoolingThresholdDays}}, \"cooling\", \"cold\")))" }
+    ],
+    "data": [
+      { "FullName": "Mina", "Owner": "liz", "RoleOrg": "Warm connector into local facilities", "Sphere": "facility", "Relationship": "Trusted connector who can make warm introductions", "DoorsCanOpen": "Introductions to the Warwick and Goshen facility targets", "TheAsk": "Confirm the two unconfirmed Warwick and Goshen facility names and offer a warm intro", "Status": "in-conversation", "NextStep": "Sit down with Mina to confirm targets", "Notes": "Primary warm route for facility outreach." },
+      { "FullName": "Haley", "Owner": "liz", "RoleOrg": "Community connector", "Sphere": "community", "Relationship": "Connector who can make warm introductions", "DoorsCanOpen": "Warm introductions within the community ecosystem", "Status": "in-conversation", "NextStep": "Check in and thank Haley for recent introductions", "Notes": "Secondary warm route." },
+      { "FullName": "Pam", "Owner": "liz", "Sphere": "community", "Status": "reached-out", "NextStep": "Follow up on the last conversation", "Notes": "Curated starter contact, details to be confirmed with Liz." },
+      { "FullName": "Terry", "Owner": "liz", "Sphere": "community", "Status": "to-reach-out", "NextStep": "Send a first warm hello", "Notes": "Curated starter contact, details to be confirmed with Liz." }
+    ]
+  },
+
+  "Facilities": {
+    "Description": "The target places. Values aligned independent living and 55 and over communities first, the places Liz is working toward.",
+    "schema": [
+      { "name": "Name", "datatype": "string", "type": "calculated", "nullable": false, "Description": "Logical key for the facility, a slug of FacilityName.", "formula": "=SUBSTITUTE(LOWER({{FacilityName}}), \" \", \"-\")" },
+      { "name": "FacilityName", "datatype": "string", "type": "raw", "nullable": false, "Description": "The facility name. The only required field on a facility. Maps to facilities.facility_name. See GovernanceRules R6." },
+      { "name": "Owner", "datatype": "string", "type": "relationship", "nullable": false, "Description": "The profile that owns this row. Holds the Profiles Name. Drives Row Level Security. Maps to facilities.user_id. See GovernanceRules R1.", "RelatedTo": "Profiles" },
+      { "name": "Type", "datatype": "string", "type": "relationship", "nullable": true, "Description": "The kind of facility. Holds the FacilityTypes Name. Maps to facilities.type.", "RelatedTo": "FacilityTypes" },
+      { "name": "Town", "datatype": "string", "type": "raw", "nullable": true, "Description": "Town where the facility is located. Maps to facilities.town." },
+      { "name": "Region", "datatype": "string", "type": "relationship", "nullable": true, "Description": "Region grouping for the facility. Holds the Regions Name. Maps to facilities.region.", "RelatedTo": "Regions" },
+      { "name": "LeadRoute", "datatype": "string", "type": "relationship", "nullable": true, "Description": "How Liz can reach this facility, warm or cold. Holds the LeadRoutes Name. Maps to facilities.lead_route.", "RelatedTo": "LeadRoutes" },
+      { "name": "Aligned", "datatype": "string", "type": "relationship", "nullable": true, "Description": "Whether the facility seems values aligned. Holds the AlignmentLevels Name. Maps to facilities.aligned.", "RelatedTo": "AlignmentLevels" },
+      { "name": "DecisionMaker", "datatype": "string", "type": "raw", "nullable": true, "Description": "Name of the person who decides. Maps to facilities.decision_maker." },
+      { "name": "Title", "datatype": "string", "type": "raw", "nullable": true, "Description": "Title of the decision maker. Maps to facilities.title." },
+      { "name": "Email", "datatype": "string", "type": "raw", "nullable": true, "Description": "Contact email. Maps to facilities.email." },
+      { "name": "Phone", "datatype": "string", "type": "raw", "nullable": true, "Description": "Contact phone. Maps to facilities.phone." },
+      { "name": "Website", "datatype": "string", "type": "raw", "nullable": true, "Description": "Facility website. Maps to facilities.website." },
+      { "name": "Status", "datatype": "string", "type": "relationship", "nullable": true, "Description": "Where the outreach stands. Holds the FacilityStatuses Name. Defaults to to-research. Maps to facilities.status.", "RelatedTo": "FacilityStatuses" },
+      { "name": "NextStep", "datatype": "string", "type": "raw", "nullable": true, "Description": "The gentle next step with this facility. Maps to facilities.next_step." },
+      { "name": "FitNotes", "datatype": "string", "type": "raw", "nullable": true, "Description": "Notes on fit and alignment. Maps to facilities.fit_notes." },
+      { "name": "RegionLabel", "datatype": "string", "type": "lookup", "nullable": true, "Description": "Human readable region label, pulled from the related region.", "formula": "=INDEX(Regions!{{RegionLabel}}, MATCH({{Region}}, Regions!{{Name}}, 0))" },
+      { "name": "LeadRouteLabel", "datatype": "string", "type": "lookup", "nullable": true, "Description": "Human readable lead route label, pulled from the related lead route.", "formula": "=INDEX(LeadRoutes!{{LeadRouteLabel}}, MATCH({{LeadRoute}}, LeadRoutes!{{Name}}, 0))" },
+      { "name": "IsWarmLead", "datatype": "boolean", "type": "calculated", "nullable": false, "Description": "True when there is a warm route into this facility rather than a cold approach.", "formula": "=IF(OR({{LeadRoute}}=\"warm-via-mina\", {{LeadRoute}}=\"warm-via-haley\", {{LeadRoute}}=\"warm-via-other\"), TRUE(), FALSE())" }
+    ],
+    "data": [
+      { "FacilityName": "Mount Alverno", "Owner": "liz", "Region": "warwick-ny", "Town": "Warwick", "LeadRoute": "warm-via-mina", "Aligned": "unknown", "Status": "to-research", "NextStep": "Research the community and confirm the right contact", "FitNotes": "Early target in Warwick, alignment to be confirmed." },
+      { "FacilityName": "Unconfirmed Warwick target", "Owner": "liz", "Region": "warwick-ny", "LeadRoute": "warm-via-mina", "Aligned": "unknown", "Status": "to-research", "FitNotes": "Placeholder name to be resolved with Mina." },
+      { "FacilityName": "Unconfirmed Goshen target", "Owner": "liz", "Region": "goshen-ny", "LeadRoute": "warm-via-mina", "Aligned": "unknown", "Status": "to-research", "FitNotes": "Placeholder name to be resolved with Mina." }
+    ]
+  },
+
+  "Captures": {
+    "Description": "Pain points, case studies, and ideas, captured as they come. Feeds the marketing package.",
+    "schema": [
+      { "name": "Name", "datatype": "string", "type": "calculated", "nullable": false, "Description": "Logical key for the capture, a slug of Title.", "formula": "=SUBSTITUTE(LOWER({{Title}}), \" \", \"-\")" },
+      { "name": "Title", "datatype": "string", "type": "raw", "nullable": false, "Description": "Short title of the capture. The only required field on a capture. Maps to captures.title. See GovernanceRules R6." },
+      { "name": "Owner", "datatype": "string", "type": "relationship", "nullable": false, "Description": "The profile that owns this row. Holds the Profiles Name. Drives Row Level Security. Maps to captures.user_id. See GovernanceRules R1.", "RelatedTo": "Profiles" },
+      { "name": "Type", "datatype": "string", "type": "relationship", "nullable": true, "Description": "The kind of capture. Holds the CaptureTypes Name. Defaults to idea. Maps to captures.type.", "RelatedTo": "CaptureTypes" },
+      { "name": "Detail", "datatype": "string", "type": "raw", "nullable": true, "Description": "The full text of the capture. Maps to captures.detail." }
+    ],
+    "data": [
+      { "Title": "Families feel overwhelmed by later-life planning", "Owner": "liz", "Type": "pain-point", "Detail": "Families often do not know where to begin with later-life planning and feel alone in it. A calm guide reduces the overwhelm." },
+      { "Title": "Facilities want a warmer guide for residents and families", "Owner": "liz", "Type": "pain-point", "Detail": "Communities want a gentle, human way to support residents and families through later-life planning and connection, led by community first rather than by clinical language." },
+      { "Title": "A Warwick family found calm through guided planning", "Owner": "liz", "Type": "case-study", "Detail": "A local family moved from anxiety to calm by walking through their later-life plan with a trusted guide, one small step at a time." },
+      { "Title": "Monthly community gathering on living fully in later life", "Owner": "liz", "Type": "idea", "Detail": "Host a warm monthly gathering at a partner facility focused on living fully in later life, legacy, and connection." }
+    ]
+  },
+
+  "OAuthTokens": {
+    "Description": "Server-side storage for Drive, LinkedIn, and optional Calendar and Gmail tokens. Never exposed to the client. Read and refreshed only in server code. See GovernanceRules R12.",
+    "schema": [
+      { "name": "Name", "datatype": "string", "type": "calculated", "nullable": false, "Description": "Logical key for the token, a compound of owner and provider.", "formula": "={{Owner}} & \"-\" & {{Provider}}" },
+      { "name": "Owner", "datatype": "string", "type": "relationship", "nullable": false, "Description": "The profile that owns this token. Holds the Profiles Name. Maps to oauth_tokens.user_id. See GovernanceRules R1.", "RelatedTo": "Profiles" },
+      { "name": "Provider", "datatype": "string", "type": "raw", "nullable": false, "Description": "The integration this token is for, for example google-drive, linkedin, google-calendar, or gmail. Maps to oauth_tokens.provider." },
+      { "name": "AccessToken", "datatype": "string", "type": "raw", "nullable": true, "Description": "Short lived access token. Server-side only, never sent to the client. Maps to oauth_tokens.access_token. See GovernanceRules R12." },
+      { "name": "RefreshToken", "datatype": "string", "type": "raw", "nullable": true, "Description": "Long lived refresh token, stored encrypted and tied to the owner. Server-side only. Maps to oauth_tokens.refresh_token. See GovernanceRules R12." },
+      { "name": "Scope", "datatype": "string", "type": "raw", "nullable": true, "Description": "The granted OAuth scope, kept as narrow as the feature needs. Maps to oauth_tokens.scope. See GovernanceRules R11." },
+      { "name": "ExpiresAt", "datatype": "datetime", "type": "raw", "nullable": true, "Description": "When the access token expires. Maps to oauth_tokens.expires_at." }
+    ],
+    "data": []
+  },
+
+  "Spheres": {
+    "Description": "Controlled vocabulary for people.sphere. The part of the network a person belongs to. Generated as a derivative enum table. Do not hardcode these in the frontend or schema.",
+    "schema": [
+      { "name": "Name", "datatype": "string", "type": "calculated", "nullable": false, "Description": "Slug key for the sphere, derived from the label.", "formula": "=SUBSTITUTE(LOWER({{SphereLabel}}), \" \", \"-\")" },
+      { "name": "SphereLabel", "datatype": "string", "type": "raw", "nullable": false, "Description": "Human readable sphere label shown in the app." },
+      { "name": "Description", "datatype": "string", "type": "raw", "nullable": true, "Description": "What this sphere means." },
+      { "name": "SortOrder", "datatype": "integer", "type": "raw", "nullable": false, "Description": "Display order in pickers." },
+      { "name": "People", "datatype": "string", "type": "relationship", "nullable": true, "Description": "People in this sphere.", "RelatedTo": "People" },
+      { "name": "CountOfPeople", "datatype": "integer", "type": "aggregation", "nullable": false, "Description": "Number of people in this sphere.", "formula": "=COUNTIFS(People!{{Sphere}}, Spheres!{{Name}})" }
+    ],
+    "data": [
+      { "SphereLabel": "Facility", "Description": "A target facility or someone inside one.", "SortOrder": 1 },
+      { "SphereLabel": "Independent Living", "Description": "Independent living communities and contacts.", "SortOrder": 2 },
+      { "SphereLabel": "Community", "Description": "Local community ecosystem.", "SortOrder": 3 },
+      { "SphereLabel": "Nonprofit", "Description": "Nonprofit organizations.", "SortOrder": 4 },
+      { "SphereLabel": "Foundation", "Description": "Foundations and grantmakers.", "SortOrder": 5 },
+      { "SphereLabel": "Faith Leader", "Description": "Faith leaders and congregations.", "SortOrder": 6 },
+      { "SphereLabel": "Insurance", "Description": "Insurance and benefits contacts.", "SortOrder": 7 },
+      { "SphereLabel": "Doula", "Description": "Doulas and care companions.", "SortOrder": 8 },
+      { "SphereLabel": "Legal", "Description": "Legal and estate contacts.", "SortOrder": 9 },
+      { "SphereLabel": "Mentor", "Description": "Mentors and advisors.", "SortOrder": 10 },
+      { "SphereLabel": "Other", "Description": "Anything that does not fit another sphere.", "SortOrder": 11 }
+    ]
+  },
+
+  "PersonStatuses": {
+    "Description": "Controlled vocabulary for people.status. Where a relationship stands. Generated as a derivative enum table.",
+    "schema": [
+      { "name": "Name", "datatype": "string", "type": "calculated", "nullable": false, "Description": "Slug key for the status, derived from the label.", "formula": "=SUBSTITUTE(LOWER({{StatusLabel}}), \" \", \"-\")" },
+      { "name": "StatusLabel", "datatype": "string", "type": "raw", "nullable": false, "Description": "Human readable status label shown in the app." },
+      { "name": "Description", "datatype": "string", "type": "raw", "nullable": true, "Description": "What this status means." },
+      { "name": "SortOrder", "datatype": "integer", "type": "raw", "nullable": false, "Description": "Display order in pickers." },
+      { "name": "People", "datatype": "string", "type": "relationship", "nullable": true, "Description": "People at this status.", "RelatedTo": "People" },
+      { "name": "CountOfPeople", "datatype": "integer", "type": "aggregation", "nullable": false, "Description": "Number of people at this status.", "formula": "=COUNTIFS(People!{{Status}}, PersonStatuses!{{Name}})" }
+    ],
+    "data": [
+      { "StatusLabel": "To reach out", "Description": "Ready for a first warm hello.", "SortOrder": 1 },
+      { "StatusLabel": "Reached out", "Description": "A first hello has been sent.", "SortOrder": 2 },
+      { "StatusLabel": "In conversation", "Description": "An active back and forth is underway.", "SortOrder": 3 },
+      { "StatusLabel": "Intro made", "Description": "A warm introduction has been made.", "SortOrder": 4 },
+      { "StatusLabel": "Resting", "Description": "Set aside gently for now, ready when the time is right.", "SortOrder": 5 }
+    ]
+  },
+
+  "FacilityTypes": {
+    "Description": "Controlled vocabulary for facilities.type. The kind of place. Generated as a derivative enum table.",
+    "schema": [
+      { "name": "Name", "datatype": "string", "type": "calculated", "nullable": false, "Description": "Slug key for the facility type, derived from the label.", "formula": "=SUBSTITUTE(LOWER({{TypeLabel}}), \" \", \"-\")" },
+      { "name": "TypeLabel", "datatype": "string", "type": "raw", "nullable": false, "Description": "Human readable facility type label shown in the app." },
+      { "name": "Description", "datatype": "string", "type": "raw", "nullable": true, "Description": "What this facility type means." },
+      { "name": "SortOrder", "datatype": "integer", "type": "raw", "nullable": false, "Description": "Display order in pickers." },
+      { "name": "Facilities", "datatype": "string", "type": "relationship", "nullable": true, "Description": "Facilities of this type.", "RelatedTo": "Facilities" },
+      { "name": "CountOfFacilities", "datatype": "integer", "type": "aggregation", "nullable": false, "Description": "Number of facilities of this type.", "formula": "=COUNTIFS(Facilities!{{Type}}, FacilityTypes!{{Name}})" }
+    ],
+    "data": [
+      { "TypeLabel": "Independent Living", "Description": "Independent living community.", "SortOrder": 1 },
+      { "TypeLabel": "55 and Over Community", "Description": "Age qualified 55 and over community.", "SortOrder": 2 },
+      { "TypeLabel": "Assisted Living", "Description": "Assisted living community.", "SortOrder": 3 },
+      { "TypeLabel": "Memory Care", "Description": "Memory care community.", "SortOrder": 4 },
+      { "TypeLabel": "Skilled Nursing", "Description": "Skilled nursing facility.", "SortOrder": 5 },
+      { "TypeLabel": "CCRC", "Description": "Continuing care retirement community.", "SortOrder": 6 },
+      { "TypeLabel": "Senior Center", "Description": "Senior center.", "SortOrder": 7 },
+      { "TypeLabel": "Other", "Description": "Anything that does not fit another type.", "SortOrder": 8 }
+    ]
+  },
+
+  "Regions": {
+    "Description": "Controlled vocabulary for facilities.region. Geographic grouping. Generated as a derivative enum table.",
+    "schema": [
+      { "name": "Name", "datatype": "string", "type": "calculated", "nullable": false, "Description": "Slug key for the region, derived from the label.", "formula": "=SUBSTITUTE(LOWER({{RegionLabel}}), \" \", \"-\")" },
+      { "name": "RegionLabel", "datatype": "string", "type": "raw", "nullable": false, "Description": "Human readable region label shown in the app." },
+      { "name": "Description", "datatype": "string", "type": "raw", "nullable": true, "Description": "What this region covers." },
+      { "name": "SortOrder", "datatype": "integer", "type": "raw", "nullable": false, "Description": "Display order in pickers." },
+      { "name": "Facilities", "datatype": "string", "type": "relationship", "nullable": true, "Description": "Facilities in this region.", "RelatedTo": "Facilities" },
+      { "name": "CountOfFacilities", "datatype": "integer", "type": "aggregation", "nullable": false, "Description": "Number of facilities in this region.", "formula": "=COUNTIFS(Facilities!{{Region}}, Regions!{{Name}})" }
+    ],
+    "data": [
+      { "RegionLabel": "Warwick NY", "Description": "Warwick, New York.", "SortOrder": 1 },
+      { "RegionLabel": "Goshen NY", "Description": "Goshen, New York.", "SortOrder": 2 },
+      { "RegionLabel": "Orange County NY", "Description": "Orange County, New York.", "SortOrder": 3 },
+      { "RegionLabel": "Rockland County NY", "Description": "Rockland County, New York.", "SortOrder": 4 },
+      { "RegionLabel": "Sussex County NJ", "Description": "Sussex County, New Jersey.", "SortOrder": 5 },
+      { "RegionLabel": "Other", "Description": "Anywhere else.", "SortOrder": 6 }
+    ]
+  },
+
+  "LeadRoutes": {
+    "Description": "Controlled vocabulary for facilities.lead_route. How Liz can reach a facility. Generated as a derivative enum table.",
+    "schema": [
+      { "name": "Name", "datatype": "string", "type": "calculated", "nullable": false, "Description": "Slug key for the lead route, derived from the label.", "formula": "=SUBSTITUTE(LOWER({{LeadRouteLabel}}), \" \", \"-\")" },
+      { "name": "LeadRouteLabel", "datatype": "string", "type": "raw", "nullable": false, "Description": "Human readable lead route label shown in the app." },
+      { "name": "Description", "datatype": "string", "type": "raw", "nullable": true, "Description": "What this lead route means." },
+      { "name": "SortOrder", "datatype": "integer", "type": "raw", "nullable": false, "Description": "Display order in pickers." },
+      { "name": "Facilities", "datatype": "string", "type": "relationship", "nullable": true, "Description": "Facilities reached through this route.", "RelatedTo": "Facilities" },
+      { "name": "CountOfFacilities", "datatype": "integer", "type": "aggregation", "nullable": false, "Description": "Number of facilities reached through this route.", "formula": "=COUNTIFS(Facilities!{{LeadRoute}}, LeadRoutes!{{Name}})" }
+    ],
+    "data": [
+      { "LeadRouteLabel": "Warm via Mina", "Description": "Warm introduction through Mina.", "SortOrder": 1 },
+      { "LeadRouteLabel": "Warm via Haley", "Description": "Warm introduction through Haley.", "SortOrder": 2 },
+      { "LeadRouteLabel": "Warm via other", "Description": "Warm introduction through another connector.", "SortOrder": 3 },
+      { "LeadRouteLabel": "Cold", "Description": "No warm route yet, a cold approach.", "SortOrder": 4 }
+    ]
+  },
+
+  "AlignmentLevels": {
+    "Description": "Controlled vocabulary for facilities.aligned. Whether a facility seems values aligned. Generated as a derivative enum table.",
+    "schema": [
+      { "name": "Name", "datatype": "string", "type": "calculated", "nullable": false, "Description": "Slug key for the alignment level, derived from the label.", "formula": "=SUBSTITUTE(LOWER({{AlignmentLabel}}), \" \", \"-\")" },
+      { "name": "AlignmentLabel", "datatype": "string", "type": "raw", "nullable": false, "Description": "Human readable alignment label shown in the app." },
+      { "name": "Description", "datatype": "string", "type": "raw", "nullable": true, "Description": "What this alignment level means." },
+      { "name": "SortOrder", "datatype": "integer", "type": "raw", "nullable": false, "Description": "Display order in pickers." },
+      { "name": "Facilities", "datatype": "string", "type": "relationship", "nullable": true, "Description": "Facilities at this alignment level.", "RelatedTo": "Facilities" },
+      { "name": "CountOfFacilities", "datatype": "integer", "type": "aggregation", "nullable": false, "Description": "Number of facilities at this alignment level.", "formula": "=COUNTIFS(Facilities!{{Aligned}}, AlignmentLevels!{{Name}})" }
+    ],
+    "data": [
+      { "AlignmentLabel": "Yes", "Description": "Clearly values aligned.", "SortOrder": 1 },
+      { "AlignmentLabel": "Maybe", "Description": "Possibly aligned, needs a closer look.", "SortOrder": 2 },
+      { "AlignmentLabel": "No", "Description": "Not a values fit.", "SortOrder": 3 },
+      { "AlignmentLabel": "Unknown", "Description": "Not yet assessed.", "SortOrder": 4 }
+    ]
+  },
+
+  "FacilityStatuses": {
+    "Description": "Controlled vocabulary for facilities.status. Where the outreach stands. Generated as a derivative enum table.",
+    "schema": [
+      { "name": "Name", "datatype": "string", "type": "calculated", "nullable": false, "Description": "Slug key for the facility status, derived from the label.", "formula": "=SUBSTITUTE(LOWER({{StatusLabel}}), \" \", \"-\")" },
+      { "name": "StatusLabel", "datatype": "string", "type": "raw", "nullable": false, "Description": "Human readable facility status label shown in the app." },
+      { "name": "Description", "datatype": "string", "type": "raw", "nullable": true, "Description": "What this facility status means." },
+      { "name": "SortOrder", "datatype": "integer", "type": "raw", "nullable": false, "Description": "Display order in pickers." },
+      { "name": "Facilities", "datatype": "string", "type": "relationship", "nullable": true, "Description": "Facilities at this status.", "RelatedTo": "Facilities" },
+      { "name": "CountOfFacilities", "datatype": "integer", "type": "aggregation", "nullable": false, "Description": "Number of facilities at this status.", "formula": "=COUNTIFS(Facilities!{{Status}}, FacilityStatuses!{{Name}})" }
+    ],
+    "data": [
+      { "StatusLabel": "To research", "Description": "Identified, not yet researched.", "SortOrder": 1 },
+      { "StatusLabel": "Intro requested", "Description": "A warm introduction has been requested.", "SortOrder": 2 },
+      { "StatusLabel": "Meeting set", "Description": "A meeting is on the calendar.", "SortOrder": 3 },
+      { "StatusLabel": "In discussion", "Description": "An active discussion is underway.", "SortOrder": 4 },
+      { "StatusLabel": "Proposal sent", "Description": "A proposal has been shared.", "SortOrder": 5 },
+      { "StatusLabel": "Signed", "Description": "A partnership is in place.", "SortOrder": 6 },
+      { "StatusLabel": "Resting", "Description": "Set aside gently for now.", "SortOrder": 7 }
+    ]
+  },
+
+  "CaptureTypes": {
+    "Description": "Controlled vocabulary for captures.type. The kind of capture. Generated as a derivative enum table.",
+    "schema": [
+      { "name": "Name", "datatype": "string", "type": "calculated", "nullable": false, "Description": "Slug key for the capture type, derived from the label.", "formula": "=SUBSTITUTE(LOWER({{TypeLabel}}), \" \", \"-\")" },
+      { "name": "TypeLabel", "datatype": "string", "type": "raw", "nullable": false, "Description": "Human readable capture type label shown in the app." },
+      { "name": "Description", "datatype": "string", "type": "raw", "nullable": true, "Description": "What this capture type means." },
+      { "name": "SortOrder", "datatype": "integer", "type": "raw", "nullable": false, "Description": "Display order in pickers." },
+      { "name": "Captures", "datatype": "string", "type": "relationship", "nullable": true, "Description": "Captures of this type.", "RelatedTo": "Captures" },
+      { "name": "CountOfCaptures", "datatype": "integer", "type": "aggregation", "nullable": false, "Description": "Number of captures of this type.", "formula": "=COUNTIFS(Captures!{{Type}}, CaptureTypes!{{Name}})" }
+    ],
+    "data": [
+      { "TypeLabel": "Pain Point", "Description": "A problem or frustration worth solving.", "SortOrder": 1 },
+      { "TypeLabel": "Case Study", "Description": "A real story of someone helped.", "SortOrder": 2 },
+      { "TypeLabel": "Idea", "Description": "An idea to explore later.", "SortOrder": 3 }
+    ]
+  },
+
+  "WarmthLevels": {
+    "Description": "Controlled vocabulary for the derived warmth value. Warmth is computed from LastTouched and is not stored. These rows give the frontend the labels and gentle framing for each level. See GovernanceRules R2 and R5.",
+    "schema": [
+      { "name": "Name", "datatype": "string", "type": "calculated", "nullable": false, "Description": "Slug key for the warmth level, derived from the label. Matches the value returned by People.Warmth.", "formula": "=SUBSTITUTE(LOWER({{WarmthLabel}}), \" \", \"-\")" },
+      { "name": "WarmthLabel", "datatype": "string", "type": "raw", "nullable": false, "Description": "Human readable warmth label shown in the app." },
+      { "name": "Description", "datatype": "string", "type": "raw", "nullable": true, "Description": "What this warmth level means." },
+      { "name": "Guidance", "datatype": "string", "type": "raw", "nullable": true, "Description": "Gentle framing shown to Liz. No guilt, a cold contact reads as ready for a hello. See GovernanceRules R5." },
+      { "name": "SortOrder", "datatype": "integer", "type": "raw", "nullable": false, "Description": "Display order, warmest first." }
+    ],
+    "data": [
+      { "WarmthLabel": "Warm", "Description": "Touched within the warm threshold.", "Guidance": "Recently connected.", "SortOrder": 1 },
+      { "WarmthLabel": "Cooling", "Description": "Between the warm and cooling thresholds.", "Guidance": "A good time for a gentle hello.", "SortOrder": 2 },
+      { "WarmthLabel": "Cold", "Description": "Beyond the cooling threshold or never touched.", "Guidance": "Ready for a hello.", "SortOrder": 3 }
+    ]
+  },
+
+  "GovernanceRules": {
+    "Description": "The governance rules for the BeaconHaus Companion, one row per rule. Each rule is meaning that lives in the rulebook and is traceable. The frontend and backend enforce these because they are generated from them, not because someone wrote them into code by hand.",
+    "schema": [
+      { "name": "Name", "datatype": "string", "type": "calculated", "nullable": false, "Description": "Slug key for the rule, derived from the title.", "formula": "=SUBSTITUTE(LOWER({{Title}}), \" \", \"-\")" },
+      { "name": "RuleCode", "datatype": "string", "type": "raw", "nullable": false, "Description": "Short rule code, R1 through R12." },
+      { "name": "Title", "datatype": "string", "type": "raw", "nullable": false, "Description": "Short title of the rule." },
+      { "name": "Statement", "datatype": "string", "type": "raw", "nullable": false, "Description": "The full rule statement, the meaning that downstream artifacts must honor." },
+      { "name": "Category", "datatype": "string", "type": "raw", "nullable": true, "Description": "Grouping for the rule, for example Ownership, Warmth, Ritual, Content, Positioning, Integration, Security, or UX." },
+      { "name": "EnforcedBy", "datatype": "string", "type": "raw", "nullable": true, "Description": "Where this rule is realized in the derivative outputs." },
+      { "name": "SortOrder", "datatype": "integer", "type": "raw", "nullable": false, "Description": "Display order, R1 through R12." }
+    ],
+    "data": [
+      { "RuleCode": "R1", "Title": "Ownership", "Statement": "Every row belongs to one user through the Owner relationship to Profiles. Row Level Security limits all access to that user. Realized in the generated RLS policies.", "Category": "Ownership", "EnforcedBy": "Generated RLS policies, keyed off the Owner relationship", "SortOrder": 1 },
+      { "RuleCode": "R2", "Title": "Warmth Model", "Statement": "Warmth is derived from LastTouched. A person is Warm within WarmThresholdDays, Cooling up to CoolingThresholdDays, and Cold beyond that or when never touched. Warmth drives sorting and the daily ritual only.", "Category": "Warmth", "EnforcedBy": "People.Warmth calculated field and the threshold lookups", "SortOrder": 2 },
+      { "RuleCode": "R3", "Title": "Daily Ritual", "Statement": "The Today screen surfaces MorningWarmupCount people, coldest or never touched first, one at a time. Logging a hello sets LastTouched to today and counts toward the weekly total.", "Category": "Ritual", "EnforcedBy": "App Today screen and Profiles.MorningWarmupCount", "SortOrder": 3 },
+      { "RuleCode": "R4", "Title": "Weekly Count", "Statement": "The weekly count is counted since the most recent Monday and resets each Monday. It is shown as encouragement toward WeeklyWarmupGoal, never as a backlog.", "Category": "Ritual", "EnforcedBy": "App weekly counter, Profiles.WeekStart and Profiles.WeekCount", "SortOrder": 4 },
+      { "RuleCode": "R5", "Title": "No Guilt", "Statement": "No overdue, late, or warning states anywhere. A cold contact reads as ready for a hello. Empty states are warm and inviting.", "Category": "UX", "EnforcedBy": "App copy and WarmthLevels guidance", "SortOrder": 5 },
+      { "RuleCode": "R6", "Title": "Minimal Friction", "Statement": "Only FullName for a person or FacilityName for a facility is required to create a row. Every other field is optional.", "Category": "UX", "EnforcedBy": "Field nullability, only the Name source fields are required", "SortOrder": 6 },
+      { "RuleCode": "R7", "Title": "Status Auto Advance", "Statement": "Logging a first hello moves a person from To reach out to Reached out. Further status changes are manual.", "Category": "Workflow", "EnforcedBy": "App mutation on the first logged hello", "SortOrder": 7 },
+      { "RuleCode": "R8", "Title": "Content Punctuation", "Statement": "Never use em dashes or en dashes in any label, message, or generated text. Use hyphens only inside hyphenated words. This is a BeaconHaus content rule.", "Category": "Content", "EnforcedBy": "Content generation and all labels", "SortOrder": 8 },
+      { "RuleCode": "R9", "Title": "Positioning", "Statement": "Do not lead with death literacy in the interface. Lead with later-life planning and community connection.", "Category": "Positioning", "EnforcedBy": "App copy and positioning", "SortOrder": 9 },
+      { "RuleCode": "R10", "Title": "LinkedIn Safety", "Statement": "No scraping or browser automation of LinkedIn, ever. The official API cannot read connections, search people, or send requests or messages for this app, and unofficial tools risk her account. LinkedIn is limited to official posting through the member social scope and Open in LinkedIn deep links from stored profile URLs.", "Category": "Integration", "EnforcedBy": "Integration layer, posting and deep links only", "SortOrder": 10 },
+      { "RuleCode": "R11", "Title": "Least Privilege", "Statement": "Request the narrowest OAuth scope that does the job: drive.file for Drive, calendar.events for Calendar, member social for LinkedIn posting, and Gmail send only if added later. Ask for each scope only when the feature is first used.", "Category": "Security", "EnforcedBy": "OAuth consent flow with incremental scopes", "SortOrder": 11 },
+      { "RuleCode": "R12", "Title": "Secrets Server Side", "Statement": "OAuth client secrets and token exchanges live only in server code. Tokens are stored in OAuthTokens, never in the client bundle.", "Category": "Security", "EnforcedBy": "Server routes and OAuthTokens storage", "SortOrder": 12 }
+    ]
+  },
+
+  "_meta": {
+    "_CMCC_Summary": "Hand-authored rulebook (single source of truth) for the BeaconHaus Companion. Models five entity tables (People, Facilities, Captures, Profiles, OAuthTokens), nine controlled-vocabulary enum tables (Spheres, PersonStatuses, FacilityTypes, Regions, LeadRoutes, AlignmentLevels, FacilityStatuses, CaptureTypes, WarmthLevels), and a GovernanceRules table holding R1 through R12. The Supabase schema in beaconhaus_schema.sql, its RLS policies, the controlled vocabularies, and the frontend config are derivative outputs generated from this hub. Convention: Name is the first field and is a calculated slug, there are no surrogate Id fields in the hub, foreign keys are singular relationship fields that hold the parent Name, and reverse relationships are plural.",
+    "_conversion_metadata": {
+      "source": "hand-authored from README.md, beaconhaus_schema.sql, and BeaconHaus_Companion_Architecture.md",
+      "table_count": 15,
+      "row_counts": {
+        "Profiles": 1,
+        "People": 4,
+        "Facilities": 3,
+        "Captures": 4,
+        "OAuthTokens": 0,
+        "Spheres": 11,
+        "PersonStatuses": 5,
+        "FacilityTypes": 8,
+        "Regions": 6,
+        "LeadRoutes": 4,
+        "AlignmentLevels": 4,
+        "FacilityStatuses": 7,
+        "CaptureTypes": 3,
+        "WarmthLevels": 3,
+        "GovernanceRules": 12
+      },
+      "tool_version": "n/a (hand-authored)",
+      "export_mode": "manual",
+      "airtable_backed": false,
+      "notes": "created_at and updated_at are substrate audit columns maintained by triggers in the generated schema and are intentionally not modeled in the hub. Warmth is time relative and resolved at view-compute time, which requires a TODAY() style function in the rulebook-to-postgres dialect. Ownership (R1) is modeled via the Owner relationship to Profiles, from which the transpiler generates RLS keyed to the current user."
+    }
+  }
+}

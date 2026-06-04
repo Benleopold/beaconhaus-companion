@@ -1,0 +1,23 @@
+/**/obj/**/*
+/**/bin/**/*
+/**/.ssotme/**/*
+/**/DSPXml/**/*
+/SSoT/__patch.json
+/**/.vs/**/*
+/**/node_modules/**/*
+/**/.vscode/**/*
+ssotme.env
+effortless.env
+
+# Secrets (R12: client secrets and tokens never in the repo or client bundle)
+.env
+.env.local
+.env.*.local
+
+# Effortless build scratch (regenerated each build)
+postgres/.build-manifest.json
+postgres/quota-report.json
+
+# App shell (added when the PWA is built)
+.next/
+dist/

@@ -5,7 +5,6 @@ import {
   ArrowLeft,
   Check,
   Coffee,
-  Compass,
   Copy,
   ExternalLink,
   Feather,
@@ -29,7 +28,7 @@ import type { Facility, Person } from "@/lib/types";
 import { byColdestFirst, computeWarmth } from "@/lib/warmth";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
-type Intent = "hello" | "connect" | "place" | "capture" | "wander";
+type Intent = "hello" | "connect" | "place" | "capture";
 
 const labelOf = (list: readonly { value: string; label: string }[], v?: string) =>
   v ? list.find((o) => o.value === v)?.label : undefined;
@@ -108,7 +107,6 @@ export default function TodayPage() {
           <PlaceSuggestion facility={facilityQueue[0]} onElse={(id) => setAside(id)} onBack={backToMenu} />
         )}
         {intent === "capture" && <QuickCapture onBack={backToMenu} />}
-        {intent === "wander" && <Wander onBack={backToMenu} />}
       </motion.div>
     </div>
   );
@@ -137,7 +135,6 @@ const DOORS: { intent: Intent; icon: typeof Coffee; label: string; hint: string 
   { intent: "connect", icon: HeartHandshake, label: "Really connect", hint: "I will help you write it" },
   { intent: "place", icon: MapPin, label: "Move a place forward", hint: "one step on a target" },
   { intent: "capture", icon: Feather, label: "Capture a spark", hint: "park a thought here" },
-  { intent: "wander", icon: Compass, label: "Just wander", hint: "no agenda, just look" },
 ];
 
 function IntentMenu({ onPick }: { onPick: (i: Intent) => void }) {
@@ -499,31 +496,3 @@ function QuickCapture({ onBack }: { onBack: () => void }) {
   );
 }
 
-/* --- Wander -------------------------------------------------------------- */
-function Wander({ onBack }: { onBack: () => void }) {
-  return (
-    <div>
-      <BackBar onBack={onBack} title="Just wander" />
-      <div className="card flex flex-col items-center px-6 py-10 text-center">
-        <span className="grid h-14 w-14 place-items-center rounded-full bg-surface-2 text-beacon">
-          <Compass className="h-7 w-7" />
-        </span>
-        <h2 className="mt-4 font-display text-xl text-ink">No agenda. Just look around.</h2>
-        <p className="mt-1.5 max-w-xs text-[14.5px] leading-relaxed text-ink-soft">
-          Wandering counts. Follow whatever pulls you.
-        </p>
-        <div className="mt-5 flex flex-wrap justify-center gap-2">
-          <Link href="/network">
-            <Button variant="soft">Your circle</Button>
-          </Link>
-          <Link href="/places">
-            <Button variant="soft">Your places</Button>
-          </Link>
-          <Link href="/capture">
-            <Button variant="soft">Your sparks</Button>
-          </Link>
-        </div>
-      </div>
-    </div>
-  );
-}

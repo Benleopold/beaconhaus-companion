@@ -1,5 +1,6 @@
 import Dexie, { type Table } from "dexie";
 import type { Person, Facility, Capture, Profile } from "./types";
+import type { Chat, ChatMessage } from "./copilot/types";
 
 /**
  * Local-first store (IndexedDB). This is the "local" adapter of a swappable
@@ -11,6 +12,8 @@ class BeaconDB extends Dexie {
   facilities!: Table<Facility, string>;
   captures!: Table<Capture, string>;
   profile!: Table<Profile, string>;
+  chats!: Table<Chat, string>;
+  messages!: Table<ChatMessage, string>;
 
   constructor() {
     super("beaconhaus");
@@ -19,6 +22,14 @@ class BeaconDB extends Dexie {
       facilities: "id, owner, status, region, leadRoute, facilityName",
       captures: "id, owner, type, createdAt",
       profile: "accountKey",
+    });
+    this.version(2).stores({
+      people: "id, owner, status, sphere, lastTouched, fullName",
+      facilities: "id, owner, status, region, leadRoute, facilityName",
+      captures: "id, owner, type, createdAt",
+      profile: "accountKey",
+      chats: "id, updatedAt",
+      messages: "id, chatId, createdAt",
     });
   }
 }

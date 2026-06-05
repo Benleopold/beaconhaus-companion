@@ -3,6 +3,9 @@ import { Geist, Fraunces } from "next/font/google";
 import "./globals.css";
 import { AppShell } from "@/components/app-shell";
 import { RegisterSW } from "@/components/register-sw";
+import { CopilotProvider } from "@/components/copilot/CopilotProvider";
+import { CopilotLauncher } from "@/components/copilot/CopilotLauncher";
+import { CopilotOverlay } from "@/components/copilot/CopilotOverlay";
 
 const geist = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const fraunces = Fraunces({ variable: "--font-fraunces", subsets: ["latin"], display: "swap" });
@@ -28,7 +31,11 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en">
       <body className={`${geist.variable} ${fraunces.variable} antialiased`}>
-        <AppShell>{children}</AppShell>
+        <CopilotProvider>
+          <AppShell>{children}</AppShell>
+          <CopilotLauncher />
+          <CopilotOverlay />
+        </CopilotProvider>
         <RegisterSW />
       </body>
     </html>

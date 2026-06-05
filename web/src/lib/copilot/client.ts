@@ -89,6 +89,17 @@ export function useCopilotChat(chatId: string | null) {
   return { messages, streaming, busy, send };
 }
 
+/** One-off grounded generation (e.g. draft a warm note). Returns the full text. */
+export async function quickDraft(instruction: string, path: string): Promise<string> {
+  const data = await buildDataSnapshot();
+  const page = describePage(path);
+  let text = "";
+  await streamCopilot({ messages: [{ role: "user", content: instruction }], page, data, mode: "chat" }, (p) => {
+    text = p;
+  });
+  return text;
+}
+
 export async function requestReport(chatId: string, path: string, format: ReportFormat): Promise<ReportContent> {
   const history = await db.messages.where("chatId").equals(chatId).sortBy("createdAt");
   const data = await buildDataSnapshot();

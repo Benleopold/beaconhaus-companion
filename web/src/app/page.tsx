@@ -1,26 +1,38 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
-import { ExternalLink, Heart, Mail, Sparkles, UserPlus } from "lucide-react";
+import { motion } from "framer-motion";
+import {
+  ArrowLeft,
+  Check,
+  Coffee,
+  Compass,
+  Copy,
+  ExternalLink,
+  Feather,
+  Heart,
+  HeartHandshake,
+  Mail,
+  MapPin,
+  RotateCw,
+  Sparkles,
+} from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
-import { Avatar, Button, EmptyState, WarmthPill } from "@/components/ui";
-import { useProfile, useTodayQueue } from "@/lib/hooks";
+import { Avatar, Button, EmptyState, Input, Pill, WarmthPill } from "@/components/ui";
+import { useFacilities, usePeople, useProfile } from "@/lib/hooks";
+import { quickDraft } from "@/lib/copilot/client";
 import { composeEmailHref, linkedInHref } from "@/lib/links";
-import { logHello } from "@/lib/repo";
+import { logHello, saveCapture } from "@/lib/repo";
 import { profile as profileDefaults, vocab } from "@/lib/rulebook.generated";
-import type { Person } from "@/lib/types";
-import { computeWarmth, warmthMeta } from "@/lib/warmth";
-import { cn } from "@/lib/utils";
+import type { Facility, Person } from "@/lib/types";
+import { byColdestFirst, computeWarmth } from "@/lib/warmth";
 
-/* --------------------------------------------------------------------------
-   Today: the daily ritual. A calm, one-at-a-time warmup of Liz's circle.
-   Implements GovernanceRules R3 (daily ritual) and R4 (weekly encouragement).
-   -------------------------------------------------------------------------- */
+const EASE = [0.22, 1, 0.36, 1] as const;
+type Intent = "hello" | "connect" | "place" | "capture" | "wander";
 
-const sphereLabel = (value?: string): string | null =>
-  vocab.spheres.find((s) => s.value === value)?.label ?? null;
+const labelOf = (list: readonly { value: string; label: string }[], v?: string) =>
+  v ? list.find((o) => o.value === v)?.label : undefined;
 
 function timeGreeting(): string {
   const h = new Date().getHours();
@@ -29,324 +41,489 @@ function timeGreeting(): string {
   return "Good evening";
 }
 
+function gmailWith(to: string | undefined, subject: string, body: string) {
+  const params = new URLSearchParams({ view: "cm", fs: "1", to: to ?? "", su: subject, body });
+  return `https://mail.google.com/mail/?${params.toString()}`;
+}
+
+function whyNow(p: Person): string {
+  if (p.doorsCanOpen) return `Can open: ${p.doorsCanOpen}`;
+  if (!p.lastTouched) return "Ready for a first hello.";
+  if (p.relationship) return p.relationship;
+  const sphere = labelOf(vocab.spheres, p.sphere);
+  return sphere ? `Part of your ${sphere.toLowerCase()} circle.` : "Worth staying close to.";
+}
+
 export default function TodayPage() {
   const profile = useProfile();
-  const goalCount = profile?.morningWarmupCount ?? profileDefaults.morningWarmupCount;
-  const queue = useTodayQueue(goalCount);
+  const people = usePeople();
+  const facilities = useFacilities();
 
-  // Track who has been greeted in this session so we can advance through the
-  // queue without it reshuffling beneath us as lastTouched updates.
-  const [greeted, setGreeted] = useState<Set<string>>(new Set());
+  const [intent, setIntent] = useState<Intent | null>(null);
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
 
-  const remaining = useMemo(
-    () => (queue ? queue.filter((p) => !greeted.has(p.id)) : undefined),
-    [queue, greeted],
+  const name = profile?.displayName ?? profileDefaults.displayName;
+  const tagline = profile?.tagline ?? profileDefaults.tagline;
+
+  const personQueue = useMemo(
+    () => (people ? [...people].sort(byColdestFirst).filter((p) => !dismissed.has(p.id)) : []),
+    [people, dismissed],
   );
-  const current = remaining?.[0];
+  const facilityQueue = useMemo(
+    () => (facilities ? facilities.filter((f) => !dismissed.has(f.id)) : []),
+    [facilities, dismissed],
+  );
+
+  const setAside = (id: string) => setDismissed((s) => new Set(s).add(id));
+  const backToMenu = () => setIntent(null);
 
   return (
-    <div className="flex flex-col gap-8 pt-3">
-      <Greeting profile={profile} />
-      <WeeklyEncouragement profile={profile} />
+    <div className="flex flex-col gap-6 pt-3">
+      <header>
+        <h1 className="font-display text-[1.9rem] leading-tight tracking-tight text-ink">
+          {timeGreeting()}, {name}
+        </h1>
+        <p className="mt-1 text-[15px] italic text-ink-soft">{tagline}</p>
+      </header>
 
-      <section>
-        <AnimatePresence mode="wait" initial={false}>
-          {queue === undefined ? (
-            <FocalSkeleton key="skeleton" />
-          ) : queue.length === 0 ? (
-            <motion.div key="none" {...fade}>
-              <NoPeople />
-            </motion.div>
-          ) : current ? (
-            <FocalCard
-              key={current.id}
-              person={current}
-              profile={profile}
-              onSayHello={async () => {
-                await logHello(current.id);
-                setGreeted((prev) => new Set(prev).add(current.id));
-              }}
-            />
-          ) : (
-            <motion.div key="complete" {...fade}>
-              <CompletionState />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </section>
+      <WeeklyChip count={profile?.weekCount ?? 0} goal={profile?.weeklyWarmupGoal ?? profileDefaults.weeklyWarmupGoal} />
+
+      <motion.div
+        key={intent ?? "menu"}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, ease: EASE }}
+      >
+        {intent === null && <IntentMenu onPick={setIntent} />}
+        {(intent === "hello" || intent === "connect") && (
+          <PersonSuggestion
+            mode={intent}
+            person={personQueue[0]}
+            displayName={name}
+            onElse={(id) => setAside(id)}
+            onBack={backToMenu}
+          />
+        )}
+        {intent === "place" && (
+          <PlaceSuggestion facility={facilityQueue[0]} onElse={(id) => setAside(id)} onBack={backToMenu} />
+        )}
+        {intent === "capture" && <QuickCapture onBack={backToMenu} />}
+        {intent === "wander" && <Wander onBack={backToMenu} />}
+      </motion.div>
     </div>
   );
 }
 
-/* --- Greeting ----------------------------------------------------------- */
-
-function Greeting({ profile }: { profile: ReturnType<typeof useProfile> }) {
-  const name = profile?.displayName ?? profileDefaults.displayName;
-  const tagline = profile?.tagline ?? profileDefaults.tagline;
+/* --- Weekly chip (gentle, not a goal you can fail) ----------------------- */
+function WeeklyChip({ count, goal }: { count: number; goal: number }) {
+  const met = count >= Math.max(goal, 1);
   return (
-    <motion.header
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-    >
-      <h1 className="font-display text-[1.95rem] leading-tight tracking-tight text-ink">
-        {timeGreeting()}, {name}
-      </h1>
-      <p className="mt-1 text-[15px] italic text-ink-soft">{tagline}</p>
-    </motion.header>
+    <div className="flex items-center gap-2.5 self-start rounded-full border border-line bg-surface/70 px-3.5 py-1.5">
+      <div className="flex items-center gap-1">
+        {Array.from({ length: Math.max(goal, count, 1) }, (_, i) => (
+          <span key={i} className={i < count ? "beacon h-2 w-2 rounded-full" : "h-2 w-2 rounded-full bg-surface-2"} />
+        ))}
+      </div>
+      <span className="text-[13px] text-ink-soft">
+        {met ? `${count} hellos this week. Lovely.` : `${count} of ${goal} hellos this week`}
+      </span>
+    </div>
   );
 }
 
-/* --- Weekly encouragement (R4) ------------------------------------------ */
+/* --- The doorways -------------------------------------------------------- */
+const DOORS: { intent: Intent; icon: typeof Coffee; label: string; hint: string }[] = [
+  { intent: "hello", icon: Coffee, label: "A quick hello", hint: "one small warm touch" },
+  { intent: "connect", icon: HeartHandshake, label: "Really connect", hint: "I will help you write it" },
+  { intent: "place", icon: MapPin, label: "Move a place forward", hint: "one step on a target" },
+  { intent: "capture", icon: Feather, label: "Capture a spark", hint: "park a thought here" },
+  { intent: "wander", icon: Compass, label: "Just wander", hint: "no agenda, just look" },
+];
 
-function WeeklyEncouragement({ profile }: { profile: ReturnType<typeof useProfile> }) {
-  if (!profile) return <WeeklySkeleton />;
-
-  const goal = Math.max(profile.weeklyWarmupGoal, 1);
-  const count = profile.weekCount ?? 0;
-  const met = count >= goal;
-  const dots = Math.max(goal, count);
-
+function IntentMenu({ onPick }: { onPick: (i: Intent) => void }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, delay: 0.06, ease: [0.22, 1, 0.36, 1] }}
-      className="card flex items-center gap-4 px-5 py-4"
-    >
-      <div className="flex flex-wrap items-center gap-1.5">
-        {Array.from({ length: dots }, (_, idx) => {
-          const filled = idx < count;
+    <section>
+      <p className="mb-3 px-1 text-[15px] text-ink-soft">How do you want to show up right now?</p>
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+        {DOORS.map((d, i) => {
+          const Icon = d.icon;
           return (
-            <motion.span
-              key={idx}
-              initial={{ scale: 0.6, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.12 + idx * 0.05, type: "spring", stiffness: 320, damping: 20 }}
-              className={cn(
-                "h-2.5 w-2.5 rounded-full",
-                filled ? "beacon" : "bg-surface-2 ring-1 ring-inset ring-line",
-              )}
-            />
+            <motion.button
+              key={d.intent}
+              onClick={() => onPick(d.intent)}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.04 * i, duration: 0.3, ease: EASE }}
+              className="card focus-ring flex items-center gap-3.5 p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-[var(--shadow-lift)] active:scale-[0.99]"
+            >
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-warm-soft text-beacon-deep">
+                <Icon className="h-5 w-5" />
+              </span>
+              <span className="min-w-0">
+                <span className="block font-display text-[17px] leading-tight text-ink">{d.label}</span>
+                <span className="block text-[13px] text-ink-faint">{d.hint}</span>
+              </span>
+            </motion.button>
           );
         })}
       </div>
-      <p className="text-[15px] leading-snug text-ink-soft">
-        {met ? (
-          <span className="font-medium text-beacon-deep">
-            {count} hellos this week. Your circle is glowing.
-          </span>
-        ) : (
-          <>
-            <span className="font-medium text-ink">{count}</span> of {goal} hellos this week
-          </>
-        )}
-      </p>
-    </motion.div>
+    </section>
   );
 }
 
-/* --- Focal card: one person at a time ----------------------------------- */
-
-function FocalCard({
-  person,
-  profile,
-  onSayHello,
-}: {
-  person: Person;
-  profile: ReturnType<typeof useProfile>;
-  onSayHello: () => Promise<void>;
-}) {
-  const [busy, setBusy] = useState(false);
-
-  const warmth = computeWarmth(
-    person.lastTouched,
-    profile?.warmThresholdDays,
-    profile?.coolingThresholdDays,
+function BackBar({ onBack, title }: { onBack: () => void; title: string }) {
+  return (
+    <button onClick={onBack} className="focus-ring mb-3 -ml-1 flex items-center gap-1.5 rounded-full px-2 py-1 text-[13px] text-ink-soft hover:bg-surface-2">
+      <ArrowLeft className="h-4 w-4" />
+      {title}
+    </button>
   );
-  const tone = warmthMeta[warmth].tone;
-  const sphere = sphereLabel(person.sphere);
-  const reason = person.relationship || person.doorsCanOpen || null;
-  const liUrl = linkedInHref(person);
+}
 
-  const handleHello = async () => {
-    if (busy) return;
-    setBusy(true);
+/* --- Person suggestion (hello or connect), with alternatives ------------- */
+function PersonSuggestion({
+  mode,
+  person,
+  displayName,
+  onElse,
+  onBack,
+}: {
+  mode: "hello" | "connect";
+  person: Person | undefined;
+  displayName: string;
+  onElse: (id: string) => void;
+  onBack: () => void;
+}) {
+  const [greeted, setGreeted] = useState(false);
+  const [draft, setDraft] = useState<string | null>(null);
+  const [drafting, setDrafting] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  if (!person) {
+    return (
+      <div>
+        <BackBar onBack={onBack} title="Back" />
+        <div className="card">
+          <EmptyState
+            icon={<Heart className="h-7 w-7" />}
+            title="That is everyone for now"
+            body="You have looked in on your whole circle. Add someone new, or wander for a while."
+          />
+          <div className="-mt-4 flex justify-center gap-2 px-8 pb-10">
+            <Link href="/network">
+              <Button variant="beacon">Add someone</Button>
+            </Link>
+            <Button variant="soft" onClick={onBack}>
+              Back
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const warmth = computeWarmth(person.lastTouched);
+  const role = person.roleOrg || labelOf(vocab.spheres, person.sphere);
+  const li = linkedInHref(person);
+
+  const sayHello = async () => {
+    await logHello(person.id);
+    setGreeted(true);
+  };
+  const makeDraft = async () => {
+    setDrafting(true);
+    setDraft(null);
     try {
-      await onSayHello();
+      const text = await quickDraft(
+        `Draft a short, warm outreach message I (${displayName}) can send to ${person.fullName}. Two or three sentences in a calm, human voice, leading with later-life planning and community connection. Return only the message text, no preamble, no dashes.`,
+        "/",
+      );
+      setDraft(text);
+    } finally {
+      setDrafting(false);
+    }
+  };
+  const copyDraft = async () => {
+    if (!draft) return;
+    try {
+      await navigator.clipboard.writeText(draft);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1400);
     } catch {
-      setBusy(false);
+      /* clipboard unavailable */
     }
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 18, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: -16, scale: 0.98 }}
-      transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
-      className="card relative overflow-hidden px-6 py-7"
-    >
-      {/* soft beacon glow behind the avatar */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -top-16 left-1/2 h-48 w-48 -translate-x-1/2 rounded-full bg-glow/40 blur-3xl"
-      />
-
-      <div className="relative flex flex-col items-center text-center">
-        <motion.div
-          initial={{ scale: 0.85, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ delay: 0.08, type: "spring", stiffness: 260, damping: 22 }}
-        >
-          <Avatar name={person.fullName} size={84} />
-        </motion.div>
-
-        <h2 className="mt-4 font-display text-[1.7rem] leading-tight tracking-tight text-ink">
-          {person.fullName}
-        </h2>
-
-        {(sphere || person.roleOrg) && (
-          <p className="mt-1 text-sm text-ink-soft">
-            {[person.roleOrg, sphere].filter(Boolean).join(" · ")}
-          </p>
-        )}
-
-        <div className="mt-3">
-          <WarmthPill warmth={warmth} />
+    <div>
+      <BackBar onBack={onBack} title={mode === "connect" ? "Really connect" : "A quick hello"} />
+      <div className="card relative overflow-hidden px-6 py-6">
+        <div aria-hidden className="pointer-events-none absolute -top-16 left-1/2 h-48 w-48 -translate-x-1/2 rounded-full bg-glow/30 blur-3xl" />
+        <div className="relative flex flex-col items-center text-center">
+          <Avatar name={person.fullName} size={76} />
+          <h2 className="mt-3 font-display text-[1.55rem] leading-tight tracking-tight text-ink">{person.fullName}</h2>
+          {role && <p className="mt-0.5 text-sm text-ink-soft">{role}</p>}
+          <div className="mt-2.5">
+            <WarmthPill warmth={warmth} />
+          </div>
+          <p className="mt-3 max-w-sm text-[14.5px] leading-relaxed text-ink">{whyNow(person)}</p>
         </div>
 
-        {reason && (
-          <p className="mt-4 max-w-sm text-[15px] leading-relaxed text-ink">{reason}</p>
+        {greeted ? (
+          <div className="relative mt-6 flex flex-col items-center gap-3 text-center">
+            <p className="text-[15px] text-ink-soft">A small light sent. That is plenty.</p>
+            <div className="flex gap-2">
+              <Button variant="soft" onClick={() => onElse(person.id)}>
+                <RotateCw className="h-4 w-4" /> Someone else
+              </Button>
+              <Button variant="quiet" onClick={onBack}>
+                Done for now
+              </Button>
+            </div>
+          </div>
+        ) : draft || drafting ? (
+          <div className="relative mt-5">
+            <div className="rounded-2xl border border-line bg-surface-2/60 p-4">
+              {drafting ? (
+                <p className="text-[14.5px] italic text-ink-faint">Writing something warm...</p>
+              ) : (
+                <p className="whitespace-pre-wrap text-[14.5px] leading-relaxed text-ink">{draft}</p>
+              )}
+            </div>
+            {draft && (
+              <div className="mt-3 flex flex-wrap justify-center gap-2">
+                <a href={gmailWith(person.email, `Hello from ${displayName}`, draft)} target="_blank" rel="noopener noreferrer">
+                  <Button variant="beacon">
+                    <Mail className="h-4 w-4" /> Send this
+                  </Button>
+                </a>
+                <Button variant="soft" onClick={copyDraft}>
+                  {copied ? <Check className="h-4 w-4 text-sage" /> : <Copy className="h-4 w-4" />}
+                  {copied ? "Copied" : "Copy"}
+                </Button>
+                <Button variant="ghost" onClick={makeDraft}>
+                  <RotateCw className="h-4 w-4" /> Try again
+                </Button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="relative mt-6 flex flex-col items-center gap-2.5">
+            {mode === "connect" ? (
+              <Button variant="beacon" size="lg" className="w-full max-w-xs" onClick={makeDraft}>
+                <Sparkles className="h-[18px] w-[18px]" /> Draft a warm note
+              </Button>
+            ) : (
+              <Button variant="beacon" size="lg" className="w-full max-w-xs" onClick={sayHello}>
+                <Heart className="h-[18px] w-[18px]" /> Say hello
+              </Button>
+            )}
+            <div className="flex w-full max-w-xs flex-wrap items-center justify-center gap-2">
+              {mode === "connect" && (
+                <Button variant="soft" className="flex-1" onClick={sayHello}>
+                  <Heart className="h-4 w-4" /> Just say hello
+                </Button>
+              )}
+              <a href={composeEmailHref(person)} target="_blank" rel="noopener noreferrer" className="flex-1">
+                <Button variant="soft" className="w-full">
+                  <Mail className="h-4 w-4" /> Email
+                </Button>
+              </a>
+              {li && (
+                <a href={li} target="_blank" rel="noopener noreferrer" className="flex-1">
+                  <Button variant="soft" className="w-full">
+                    <ExternalLink className="h-4 w-4" /> LinkedIn
+                  </Button>
+                </a>
+              )}
+            </div>
+            <div className="mt-1 flex items-center gap-2">
+              <button onClick={() => onElse(person.id)} className="focus-ring rounded-full px-3 py-1 text-[13px] text-ink-soft hover:bg-surface-2">
+                Someone else
+              </button>
+              <span className="text-ink-faint">.</span>
+              <button onClick={onBack} className="focus-ring rounded-full px-3 py-1 text-[13px] text-ink-soft hover:bg-surface-2">
+                Not today
+              </button>
+            </div>
+          </div>
         )}
+      </div>
+    </div>
+  );
+}
 
-        <p className="mt-3 text-sm italic text-ink-faint">{tone}</p>
+/* --- Place suggestion ---------------------------------------------------- */
+function PlaceSuggestion({
+  facility,
+  onElse,
+  onBack,
+}: {
+  facility: Facility | undefined;
+  onElse: (id: string) => void;
+  onBack: () => void;
+}) {
+  const [idea, setIdea] = useState<string | null>(null);
+  const [thinking, setThinking] = useState(false);
 
-        {/* Primary action */}
-        <div className="mt-7 w-full max-w-xs">
-          <Button
-            variant="beacon"
-            size="lg"
-            onClick={handleHello}
-            disabled={busy}
-            className="w-full"
-          >
-            <Heart className="h-[18px] w-[18px]" strokeWidth={2.2} />
-            {busy ? "Sending warmth" : "Say hello"}
-          </Button>
-        </div>
-
-        {/* Secondary actions */}
-        <div className="mt-3 flex w-full max-w-xs items-center justify-center gap-2">
-          <a href={composeEmailHref(person)} target="_blank" rel="noopener noreferrer" className="flex-1">
-            <Button variant="soft" className="w-full">
-              <Mail className="h-[17px] w-[17px]" />
-              Email
+  if (!facility) {
+    return (
+      <div>
+        <BackBar onBack={onBack} title="Back" />
+        <div className="card">
+          <EmptyState
+            icon={<MapPin className="h-7 w-7" />}
+            title="No place to tend right now"
+            body="Add a target place, or come back to this when you are ready."
+          />
+          <div className="-mt-4 flex justify-center gap-2 px-8 pb-10">
+            <Link href="/places">
+              <Button variant="beacon">Add a place</Button>
+            </Link>
+            <Button variant="soft" onClick={onBack}>
+              Back
             </Button>
-          </a>
-          {liUrl && (
-            <a href={liUrl} target="_blank" rel="noopener noreferrer" className="flex-1">
-              <Button variant="soft" className="w-full">
-                <ExternalLink className="h-[17px] w-[17px]" />
-                LinkedIn
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const type = labelOf(vocab.facilityTypes, facility.type);
+  const region = labelOf(vocab.regions, facility.region);
+  const status = labelOf(vocab.facilityStatuses, facility.status);
+  const lead = labelOf(vocab.leadRoutes, facility.leadRoute);
+
+  const suggest = async () => {
+    setThinking(true);
+    setIdea(null);
+    try {
+      const text = await quickDraft(
+        `Give me one concrete, small next step to move the facility "${facility.facilityName}" forward, in one or two sentences. Ground it in what you know about this place and my warm network. No dashes, no preamble.`,
+        "/",
+      );
+      setIdea(text);
+    } finally {
+      setThinking(false);
+    }
+  };
+
+  return (
+    <div>
+      <BackBar onBack={onBack} title="Move a place forward" />
+      <div className="card px-5 py-5">
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="font-display text-[1.35rem] leading-tight text-ink">{facility.facilityName}</h2>
+          {status && <Pill tone="beacon">{status}</Pill>}
+        </div>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {type && <Pill>{type}</Pill>}
+          {region && <Pill tone="sage">{region}</Pill>}
+        </div>
+        {lead && <p className="mt-3 text-[14px] text-ink-soft">Reach: {lead}</p>}
+        {facility.nextStep && <p className="mt-1 text-[14px] text-ink">Next step: {facility.nextStep}</p>}
+        {facility.fitNotes && <p className="mt-1 text-[13.5px] italic text-ink-faint">{facility.fitNotes}</p>}
+
+        {(idea || thinking) && (
+          <div className="mt-4 rounded-2xl border border-line bg-surface-2/60 p-4">
+            {thinking ? (
+              <p className="text-[14px] italic text-ink-faint">Thinking of a gentle next step...</p>
+            ) : (
+              <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-ink">{idea}</p>
+            )}
+          </div>
+        )}
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button variant="beacon" onClick={suggest}>
+            <Sparkles className="h-4 w-4" /> Suggest a next step
+          </Button>
+          {facility.website && (
+            <a href={/^https?:\/\//.test(facility.website) ? facility.website : `https://${facility.website}`} target="_blank" rel="noopener noreferrer">
+              <Button variant="soft">
+                <ExternalLink className="h-4 w-4" /> Website
               </Button>
             </a>
           )}
+          <Button variant="ghost" onClick={() => onElse(facility.id)}>
+            <RotateCw className="h-4 w-4" /> Different place
+          </Button>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
-/* --- Completion state --------------------------------------------------- */
+/* --- Quick capture ------------------------------------------------------- */
+function QuickCapture({ onBack }: { onBack: () => void }) {
+  const [title, setTitle] = useState("");
+  const [saved, setSaved] = useState(false);
 
-function CompletionState() {
+  const save = async () => {
+    if (!title.trim()) return;
+    await saveCapture({ title: title.trim(), type: "idea" });
+    setTitle("");
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1600);
+  };
+
   return (
-    <div className="card flex flex-col items-center px-6 py-12 text-center">
-      <motion.div
-        initial={{ scale: 0.7, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ type: "spring", stiffness: 220, damping: 18 }}
-        className="relative"
-      >
-        <span className="beacon grid h-20 w-20 place-items-center rounded-full">
-          <motion.span
-            animate={{ scale: [1, 1.12, 1], opacity: [0.9, 1, 0.9] }}
-            transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
-          >
-            <Sparkles className="h-8 w-8 text-white" strokeWidth={2} />
-          </motion.span>
-        </span>
-        <motion.span
-          aria-hidden
-          className="absolute inset-0 -z-10 rounded-full bg-glow/50 blur-2xl"
-          animate={{ scale: [1, 1.25, 1], opacity: [0.4, 0.7, 0.4] }}
-          transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
+    <div>
+      <BackBar onBack={onBack} title="Capture a spark" />
+      <div className="card p-5">
+        <p className="mb-3 text-[15px] text-ink-soft">What is on your mind? Park it here and let it go.</p>
+        <Input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") void save();
+          }}
+          placeholder="A thought, a pain point, an idea..."
+          autoFocus
         />
-      </motion.div>
-
-      <h2 className="mt-6 font-display text-2xl tracking-tight text-ink">
-        You have tended your circle today
-      </h2>
-      <p className="mt-2 max-w-xs text-[15px] leading-relaxed text-ink-soft">
-        Every hello is a small light. Rest easy now and let it glow. There is nothing more to do.
-      </p>
-    </div>
-  );
-}
-
-/* --- No people at all --------------------------------------------------- */
-
-function NoPeople() {
-  return (
-    <div className="card">
-      <EmptyState
-        icon={<UserPlus className="h-7 w-7" />}
-        title="Your circle starts here"
-        body="Add someone you would love to stay close to, and a gentle daily hello will be ready for you."
-      />
-      <div className="px-8 pb-10 -mt-4 flex justify-center">
-        <Link href="/network">
-          <Button variant="beacon" size="lg">
-            <UserPlus className="h-[18px] w-[18px]" />
-            Add your first person
+        <div className="mt-3 flex items-center gap-2">
+          <Button variant="beacon" onClick={save} disabled={!title.trim()}>
+            <Feather className="h-4 w-4" /> Keep it
           </Button>
-        </Link>
+          {saved && (
+            <span className="inline-flex items-center gap-1 text-[13px] text-sage">
+              <Check className="h-4 w-4" /> Saved
+            </span>
+          )}
+          <Link href="/capture" className="ml-auto text-[13px] text-ink-soft underline-offset-2 hover:underline">
+            See all captures
+          </Link>
+        </div>
       </div>
     </div>
   );
 }
 
-/* --- Skeletons ---------------------------------------------------------- */
-
-const fade = {
-  initial: { opacity: 0, y: 12 },
-  animate: { opacity: 1, y: 0 },
-  exit: { opacity: 0, y: -10 },
-  transition: { duration: 0.36, ease: [0.22, 1, 0.36, 1] as const },
-};
-
-function WeeklySkeleton() {
+/* --- Wander -------------------------------------------------------------- */
+function Wander({ onBack }: { onBack: () => void }) {
   return (
-    <div className="card flex items-center gap-4 px-5 py-4">
-      <div className="flex gap-1.5">
-        {Array.from({ length: 4 }, (_, idx) => (
-          <span key={idx} className="h-2.5 w-2.5 rounded-full bg-surface-2" />
-        ))}
+    <div>
+      <BackBar onBack={onBack} title="Just wander" />
+      <div className="card flex flex-col items-center px-6 py-10 text-center">
+        <span className="grid h-14 w-14 place-items-center rounded-full bg-surface-2 text-beacon">
+          <Compass className="h-7 w-7" />
+        </span>
+        <h2 className="mt-4 font-display text-xl text-ink">No agenda. Just look around.</h2>
+        <p className="mt-1.5 max-w-xs text-[14.5px] leading-relaxed text-ink-soft">
+          Wandering counts. Follow whatever pulls you.
+        </p>
+        <div className="mt-5 flex flex-wrap justify-center gap-2">
+          <Link href="/network">
+            <Button variant="soft">Your circle</Button>
+          </Link>
+          <Link href="/places">
+            <Button variant="soft">Your places</Button>
+          </Link>
+          <Link href="/capture">
+            <Button variant="soft">Your sparks</Button>
+          </Link>
+        </div>
       </div>
-      <div className="h-3.5 w-32 rounded-full bg-surface-2" />
-    </div>
-  );
-}
-
-function FocalSkeleton() {
-  return (
-    <div className="card flex flex-col items-center px-6 py-7">
-      <div className="h-[84px] w-[84px] animate-pulse rounded-full bg-surface-2" />
-      <div className="mt-5 h-6 w-40 animate-pulse rounded-full bg-surface-2" />
-      <div className="mt-3 h-4 w-28 animate-pulse rounded-full bg-surface-2" />
-      <div className="mt-4 h-4 w-56 animate-pulse rounded-full bg-surface-2" />
-      <div className="mt-7 h-12 w-full max-w-xs animate-pulse rounded-full bg-surface-2" />
     </div>
   );
 }

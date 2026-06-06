@@ -2,14 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Compass, MapPin, Plus, Sparkles } from "lucide-react";
+import { Compass, Key, MapPin, Plus, Sparkles } from "lucide-react";
+import Link from "next/link";
 import { Button, Card, EmptyState, Pill } from "@/components/ui";
 import { FacilityForm } from "@/components/facility-form";
-import { useFacilities } from "@/lib/hooks";
+import { useFacilities, usePeople } from "@/lib/hooks";
 import { vocab } from "@/lib/rulebook.generated";
-import type { Facility } from "@/lib/types";
+import type { Facility, Person } from "@/lib/types";
 
-// Look up a friendly label for a stored vocab value.
 const labelFor = (
   list: readonly { value: string; label: string }[],
   value?: string,
@@ -17,13 +17,43 @@ const labelFor = (
 
 const isWarmRoute = (value?: string) => Boolean(value && value.startsWith("warm-via-"));
 
+/** Extract the connector's first-name token from "warm-via-mina" → "mina". */
+function extractConnectorToken(leadRoute?: string): string | null {
+  if (!leadRoute?.startsWith("warm-via-")) return null;
+  const token = leadRoute.slice("warm-via-".length).toLowerCase().trim();
+  return token && token !== "other" ? token : null;
+}
+
+/** Find the person who is the named warm connector for this facility. */
+function findConnector(leadRoute: string | undefined, people: Person[]): Person | undefined {
+  const token = extractConnectorToken(leadRoute);
+  if (!token) return undefined;
+  return people.find((p) => p.fullName?.toLowerCase().includes(token));
+}
+
+/** Status priority for sorting: active pipeline stages surface first. */
+const STATUS_RANK: Record<string, number> = {
+  "in-discussion": 0,
+  "meeting-set": 1,
+  "intro-requested": 2,
+  "proposal-sent": 3,
+  "to-research": 4,
+  "signed": 5,
+  "resting": 6,
+};
+function statusRank(s?: string) {
+  return s ? (STATUS_RANK[s] ?? 7) : 7;
+}
+
 function FacilityCard({
   facility,
   index,
+  connector,
   onOpen,
 }: {
   facility: Facility;
   index: number;
+  connector: Person | undefined;
   onOpen: () => void;
 }) {
   const typeLabel = labelFor(vocab.facilityTypes, facility.type);
@@ -69,6 +99,7 @@ function FacilityCard({
           </div>
         )}
 
+        {/* Route + alignment row */}
         {(routeLabel || alignedLabel) && (
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px]">
             {routeLabel &&
@@ -76,7 +107,6 @@ function FacilityCard({
                 <span className="inline-flex items-center gap-1.5 text-beacon-deep">
                   <Sparkles className="h-3.5 w-3.5" />
                   <span className="font-medium">{routeLabel}</span>
-                  <span className="text-ink-faint">a warm welcome awaits</span>
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1.5 text-ink-soft">
@@ -84,12 +114,25 @@ function FacilityCard({
                   {routeLabel}
                 </span>
               ))}
-            {alignedLabel && (
+            {alignedLabel && facility.aligned !== "unknown" && (
               <span className="text-ink-soft">
                 <span className="text-ink-faint">Aligned</span> {alignedLabel}
               </span>
             )}
           </div>
+        )}
+
+        {/* Bidirectional connector chip: tapping goes to People */}
+        {connector && (
+          <Link
+            href="/network"
+            onClick={(e) => e.stopPropagation()}
+            className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-warm-soft px-3 py-1 text-[12.5px] font-medium text-beacon-deep hover:bg-warm transition-colors"
+            aria-label={`Ask ${connector.fullName} for the introduction`}
+          >
+            <Key className="h-3 w-3" />
+            Ask {connector.fullName}
+          </Link>
         )}
 
         {facility.fitNotes && (
@@ -124,32 +167,33 @@ function PlacesSkeleton() {
 
 export default function PlacesPage() {
   const facilities = useFacilities();
+  const people = usePeople();
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Facility | null>(null);
 
   const sorted = useMemo(() => {
     if (!facilities) return undefined;
-    return [...facilities].sort((a, b) =>
-      a.facilityName.localeCompare(b.facilityName, undefined, { sensitivity: "base" }),
-    );
+    return [...facilities].sort((a, b) => {
+      // Warm routes surface before cold; within same route type, sort by pipeline status
+      const aWarm = isWarmRoute(a.leadRoute) ? 0 : 1;
+      const bWarm = isWarmRoute(b.leadRoute) ? 0 : 1;
+      if (aWarm !== bWarm) return aWarm - bWarm;
+      const sr = statusRank(a.status) - statusRank(b.status);
+      if (sr !== 0) return sr;
+      return a.facilityName.localeCompare(b.facilityName, undefined, { sensitivity: "base" });
+    });
   }, [facilities]);
 
-  const openCreate = () => {
-    setEditing(null);
-    setFormOpen(true);
-  };
-  const openEdit = (f: Facility) => {
-    setEditing(f);
-    setFormOpen(true);
-  };
+  const openCreate = () => { setEditing(null); setFormOpen(true); };
+  const openEdit = (f: Facility) => { setEditing(f); setFormOpen(true); };
 
   const count = sorted?.length ?? 0;
   const countLabel =
     count === 0 ? "Ready when you are" : count === 1 ? "1 place" : `${count} places`;
 
   return (
-    <div className="pt-2">
-      <header className="flex items-end justify-between gap-3">
+    <div className="pt-3">
+      <header className="flex items-end justify-between gap-3 pb-1">
         <div>
           <h1 className="font-display text-[28px] leading-tight text-ink">Target places</h1>
           <p className="mt-1 text-[14px] text-ink-soft">{countLabel}</p>
@@ -179,7 +223,13 @@ export default function PlacesPage() {
       ) : (
         <div className="mt-5 space-y-3">
           {sorted.map((f, i) => (
-            <FacilityCard key={f.id} facility={f} index={i} onOpen={() => openEdit(f)} />
+            <FacilityCard
+              key={f.id}
+              facility={f}
+              index={i}
+              connector={people ? findConnector(f.leadRoute, people) : undefined}
+              onOpen={() => openEdit(f)}
+            />
           ))}
         </div>
       )}

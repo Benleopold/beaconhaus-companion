@@ -27,6 +27,7 @@ export default function NetworkPage() {
 
   const loading = people === undefined;
   const count = people?.length ?? 0;
+  const connectorCount = people?.filter((p) => p.doorsCanOpen).length ?? 0;
 
   const openCreate = () => {
     setEditing(undefined);
@@ -41,14 +42,19 @@ export default function NetworkPage() {
     count === 0 ? "Ready to begin" : count === 1 ? "1 person" : `${count} people`;
 
   return (
-    <div className="pt-2">
+    <div className="pt-3">
       {/* Header */}
-      <div className="flex items-end justify-between gap-3 pb-4">
+      <div className="flex items-end justify-between gap-3 pb-2">
         <div className="min-w-0">
           <h1 className="font-display text-[28px] leading-tight text-ink">
             Your warm circle
           </h1>
           <p className="mt-0.5 text-sm text-ink-soft">{countLabel}</p>
+          {connectorCount > 0 && (
+            <p className="mt-0.5 text-[12.5px] text-beacon-deep">
+              {connectorCount === 1 ? "1 connector" : `${connectorCount} connectors`} who can open doors to target places
+            </p>
+          )}
         </div>
         <Button variant="beacon" onClick={openCreate} aria-label="Add a person">
           <Plus className="h-[18px] w-[18px]" />
@@ -58,7 +64,7 @@ export default function NetworkPage() {
 
       {/* Search */}
       {(loading || count > 0) && (
-        <div className="relative mb-4">
+        <div className="relative mb-4 mt-2">
           <Search className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-ink-faint" />
           <Input
             value={query}
@@ -100,7 +106,7 @@ export default function NetworkPage() {
           body="Try a different name or role, or add someone new to your circle."
         />
       ) : (
-        <motion.div layout className="flex flex-col gap-2.5">
+        <motion.div layout className="flex flex-col gap-3">
           <AnimatePresence initial={false}>
             {filtered?.map((person) => (
               <PersonCard key={person.id} person={person} onOpen={openEdit} />

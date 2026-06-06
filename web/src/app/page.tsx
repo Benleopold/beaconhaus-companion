@@ -10,6 +10,7 @@ import {
   Feather,
   Heart,
   HeartHandshake,
+  Key,
   Mail,
   MapPin,
   RotateCw,
@@ -45,12 +46,26 @@ function gmailWith(to: string | undefined, subject: string, body: string) {
   return `https://mail.google.com/mail/?${params.toString()}`;
 }
 
+/** One-line reason why this person is surfaced today. */
 function whyNow(p: Person): string {
-  if (p.doorsCanOpen) return `Can open: ${p.doorsCanOpen}`;
+  if (p.doorsCanOpen) return `Connector: can open doors to ${p.doorsCanOpen.toLowerCase()}.`;
   if (!p.lastTouched) return "Ready for a first hello.";
   if (p.relationship) return p.relationship;
   const sphere = labelOf(vocab.spheres, p.sphere);
   return sphere ? `Part of your ${sphere.toLowerCase()} circle.` : "Worth staying close to.";
+}
+
+/** Parse "warm-via-mina" → "mina"; return null for "warm-via-other" or non-warm routes. */
+function connectorToken(leadRoute?: string): string | null {
+  if (!leadRoute?.startsWith("warm-via-")) return null;
+  const t = leadRoute.slice("warm-via-".length).toLowerCase().trim();
+  return t && t !== "other" ? t : null;
+}
+
+function findConnectorForFacility(facility: Facility, people: Person[]): Person | undefined {
+  const token = connectorToken(facility.leadRoute);
+  if (!token) return undefined;
+  return people.find((p) => p.fullName?.toLowerCase().includes(token));
 }
 
 export default function TodayPage() {
@@ -104,7 +119,12 @@ export default function TodayPage() {
           />
         )}
         {intent === "place" && (
-          <PlaceSuggestion facility={facilityQueue[0]} onElse={(id) => setAside(id)} onBack={backToMenu} />
+          <PlaceSuggestion
+            facility={facilityQueue[0]}
+            people={people ?? []}
+            onElse={(id) => setAside(id)}
+            onBack={backToMenu}
+          />
         )}
         {intent === "capture" && <QuickCapture onBack={backToMenu} />}
       </motion.div>
@@ -112,7 +132,7 @@ export default function TodayPage() {
   );
 }
 
-/* --- Weekly chip (gentle, not a goal you can fail) ----------------------- */
+/* --- Weekly chip ---------------------------------------------------------- */
 function WeeklyChip({ count, goal }: { count: number; goal: number }) {
   const met = count >= Math.max(goal, 1);
   return (
@@ -141,7 +161,7 @@ function IntentMenu({ onPick }: { onPick: (i: Intent) => void }) {
   return (
     <section>
       <p className="mb-3 px-1 text-[15px] text-ink-soft">How do you want to show up right now?</p>
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {DOORS.map((d, i) => {
           const Icon = d.icon;
           return (
@@ -151,9 +171,9 @@ function IntentMenu({ onPick }: { onPick: (i: Intent) => void }) {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.04 * i, duration: 0.3, ease: EASE }}
-              className="card focus-ring flex items-center gap-3.5 p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-[var(--shadow-lift)] active:scale-[0.99]"
+              className="card focus-ring flex items-center gap-4 p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-[var(--shadow-lift)] active:scale-[0.99]"
             >
-              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-warm-soft text-beacon-deep">
+              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-warm-soft text-beacon-deep">
                 <Icon className="h-5 w-5" />
               </span>
               <span className="min-w-0">
@@ -170,14 +190,14 @@ function IntentMenu({ onPick }: { onPick: (i: Intent) => void }) {
 
 function BackBar({ onBack, title }: { onBack: () => void; title: string }) {
   return (
-    <button onClick={onBack} className="focus-ring mb-3 -ml-1 flex items-center gap-1.5 rounded-full px-2 py-1 text-[13px] text-ink-soft hover:bg-surface-2">
+    <button onClick={onBack} className="focus-ring mb-4 -ml-1 flex items-center gap-1.5 rounded-full px-2 py-1 text-[13px] text-ink-soft hover:bg-surface-2">
       <ArrowLeft className="h-4 w-4" />
       {title}
     </button>
   );
 }
 
-/* --- Person suggestion (hello or connect), with alternatives ------------- */
+/* --- Person suggestion --------------------------------------------------- */
 function PersonSuggestion({
   mode,
   person,
@@ -204,15 +224,13 @@ function PersonSuggestion({
           <EmptyState
             icon={<Heart className="h-7 w-7" />}
             title="That is everyone for now"
-            body="You have looked in on your whole circle. Add someone new, or wander for a while."
+            body="You have looked in on your whole circle. Add someone new in People."
           />
           <div className="-mt-4 flex justify-center gap-2 px-8 pb-10">
             <Link href="/network">
               <Button variant="beacon">Add someone</Button>
             </Link>
-            <Button variant="soft" onClick={onBack}>
-              Back
-            </Button>
+            <Button variant="soft" onClick={onBack}>Back</Button>
           </div>
         </div>
       </div>
@@ -246,15 +264,13 @@ function PersonSuggestion({
       await navigator.clipboard.writeText(draft);
       setCopied(true);
       setTimeout(() => setCopied(false), 1400);
-    } catch {
-      /* clipboard unavailable */
-    }
+    } catch { /* clipboard unavailable */ }
   };
 
   return (
     <div>
       <BackBar onBack={onBack} title={mode === "connect" ? "Really connect" : "A quick hello"} />
-      <div className="card relative overflow-hidden px-6 py-6">
+      <div className="card relative overflow-hidden px-6 py-7">
         <div aria-hidden className="pointer-events-none absolute -top-16 left-1/2 h-48 w-48 -translate-x-1/2 rounded-full bg-glow/30 blur-3xl" />
         <div className="relative flex flex-col items-center text-center">
           <Avatar name={person.fullName} size={76} />
@@ -269,13 +285,21 @@ function PersonSuggestion({
         {greeted ? (
           <div className="relative mt-6 flex flex-col items-center gap-3 text-center">
             <p className="text-[15px] text-ink-soft">A small light sent. That is plenty.</p>
+            {/* Connector nudge: if they can open doors, surface it post-greeting */}
+            {person.doorsCanOpen && (
+              <p className="max-w-xs text-[13px] leading-relaxed text-ink-faint">
+                They can open doors to{" "}
+                <Link href="/places" className="text-beacon-deep hover:underline">
+                  {person.doorsCanOpen.toLowerCase()}
+                </Link>
+                {person.theAsk && <> &mdash; ask: {person.theAsk.toLowerCase()}</>}.
+              </p>
+            )}
             <div className="flex gap-2">
               <Button variant="soft" onClick={() => onElse(person.id)}>
                 <RotateCw className="h-4 w-4" /> Someone else
               </Button>
-              <Button variant="quiet" onClick={onBack}>
-                Done for now
-              </Button>
+              <Button variant="quiet" onClick={onBack}>Done for now</Button>
             </div>
           </div>
         ) : draft || drafting ? (
@@ -305,7 +329,7 @@ function PersonSuggestion({
             )}
           </div>
         ) : (
-          <div className="relative mt-6 flex flex-col items-center gap-2.5">
+          <div className="relative mt-7 flex flex-col items-center gap-3">
             {mode === "connect" ? (
               <Button variant="beacon" size="lg" className="w-full max-w-xs" onClick={makeDraft}>
                 <Sparkles className="h-[18px] w-[18px]" /> Draft a warm note
@@ -353,10 +377,12 @@ function PersonSuggestion({
 /* --- Place suggestion ---------------------------------------------------- */
 function PlaceSuggestion({
   facility,
+  people,
   onElse,
   onBack,
 }: {
   facility: Facility | undefined;
+  people: Person[];
   onElse: (id: string) => void;
   onBack: () => void;
 }) {
@@ -371,15 +397,13 @@ function PlaceSuggestion({
           <EmptyState
             icon={<MapPin className="h-7 w-7" />}
             title="No place to tend right now"
-            body="Add a target place, or come back to this when you are ready."
+            body="Add a target place in Places, or come back to this when you are ready."
           />
           <div className="-mt-4 flex justify-center gap-2 px-8 pb-10">
             <Link href="/places">
               <Button variant="beacon">Add a place</Button>
             </Link>
-            <Button variant="soft" onClick={onBack}>
-              Back
-            </Button>
+            <Button variant="soft" onClick={onBack}>Back</Button>
           </div>
         </div>
       </div>
@@ -389,7 +413,7 @@ function PlaceSuggestion({
   const type = labelOf(vocab.facilityTypes, facility.type);
   const region = labelOf(vocab.regions, facility.region);
   const status = labelOf(vocab.facilityStatuses, facility.status);
-  const lead = labelOf(vocab.leadRoutes, facility.leadRoute);
+  const connector = findConnectorForFacility(facility, people);
 
   const suggest = async () => {
     setThinking(true);
@@ -413,13 +437,41 @@ function PlaceSuggestion({
           <h2 className="font-display text-[1.35rem] leading-tight text-ink">{facility.facilityName}</h2>
           {status && <Pill tone="beacon">{status}</Pill>}
         </div>
-        <div className="mt-2 flex flex-wrap gap-1.5">
+
+        <div className="mt-2.5 flex flex-wrap gap-1.5">
           {type && <Pill>{type}</Pill>}
           {region && <Pill tone="sage">{region}</Pill>}
         </div>
-        {lead && <p className="mt-3 text-[14px] text-ink-soft">Reach: {lead}</p>}
-        {facility.nextStep && <p className="mt-1 text-[14px] text-ink">Next step: {facility.nextStep}</p>}
-        {facility.fitNotes && <p className="mt-1 text-[13.5px] italic text-ink-faint">{facility.fitNotes}</p>}
+
+        {/* Bidirectional connector: show who can open this door */}
+        {connector ? (
+          <div className="mt-3.5 flex items-center gap-2 rounded-2xl bg-warm-soft px-3.5 py-2.5">
+            <Key className="h-4 w-4 shrink-0 text-beacon" />
+            <div className="min-w-0">
+              <p className="text-[13.5px] font-medium text-beacon-deep">
+                Ask {connector.fullName} for the introduction
+              </p>
+              {connector.theAsk && (
+                <p className="mt-0.5 text-[12px] text-ink-soft">{connector.theAsk}</p>
+              )}
+            </div>
+            <Link
+              href="/network"
+              className="ml-auto shrink-0 rounded-full px-2.5 py-1 text-[12px] font-medium text-beacon-deep hover:bg-warm transition-colors"
+            >
+              See {connector.fullName}
+            </Link>
+          </div>
+        ) : facility.nextStep ? (
+          <div className="mt-3.5 rounded-2xl bg-surface-2 px-3.5 py-2.5">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Next step</span>
+            <p className="mt-0.5 text-[14px] leading-relaxed text-ink">{facility.nextStep}</p>
+          </div>
+        ) : null}
+
+        {facility.fitNotes && (
+          <p className="mt-3 text-[13.5px] italic text-ink-faint">{facility.fitNotes}</p>
+        )}
 
         {(idea || thinking) && (
           <div className="mt-4 rounded-2xl border border-line bg-surface-2/60 p-4">
@@ -468,17 +520,15 @@ function QuickCapture({ onBack }: { onBack: () => void }) {
     <div>
       <BackBar onBack={onBack} title="Capture a spark" />
       <div className="card p-5">
-        <p className="mb-3 text-[15px] text-ink-soft">What is on your mind? Park it here and let it go.</p>
+        <p className="mb-3.5 text-[15px] text-ink-soft">What is on your mind? Park it here and let it go.</p>
         <Input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") void save();
-          }}
+          onKeyDown={(e) => { if (e.key === "Enter") void save(); }}
           placeholder="A thought, a pain point, an idea..."
           autoFocus
         />
-        <div className="mt-3 flex items-center gap-2">
+        <div className="mt-3.5 flex items-center gap-2">
           <Button variant="beacon" onClick={save} disabled={!title.trim()}>
             <Feather className="h-4 w-4" /> Keep it
           </Button>
@@ -495,4 +545,3 @@ function QuickCapture({ onBack }: { onBack: () => void }) {
     </div>
   );
 }
-

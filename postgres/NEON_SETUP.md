@@ -9,9 +9,21 @@ Use this when creating the hosted BeaconHaus backend for the Vercel pilot.
 3. Keep the connection string server-side only. It goes in Vercel as
    `DATABASE_URL`.
 
-## 2. Apply SQL in order
+## 2. Apply SQL
 
-Open the Neon SQL editor and run the files in this order:
+Fast path: open the Neon SQL editor and run:
+
+```text
+neon-pilot.sql
+```
+
+If the bundle is missing or stale, regenerate it from the repo root:
+
+```text
+node postgres/build-neon-bundle.mjs
+```
+
+Careful path: run the files in this order:
 
 ```text
 00-bootstrap.sql

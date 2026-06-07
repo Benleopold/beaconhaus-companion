@@ -1,15 +1,15 @@
 # BeaconHaus Companion: Architecture and Integrations
 
-A build plan for Claude Code to take the companion from a single-device prototype to a real app that Liz uses on her phone, tablet, and computer, with Google Drive, native email, calendar, and LinkedIn connected. Pair this with the data and rules spec, the sample workbook, and the schema file `beaconhaus_schema.sql`.
+A build plan for Claude Code to take the companion from a single-device prototype to a real app that Liz uses on her phone, tablet, and computer, with Google Drive, native email, calendar, and LinkedIn connected. Pair this with the data and rules spec, the sample workbook, and the ERB-generated `postgres/` output.
 
 The guiding rule does not change. The backend gets richer, but Liz's experience stays calm. Every integration shows up only as a gentle button when she needs it, never as setup or settings she has to think about.
 
 ## 1. Recommended stack
 
 - App: a responsive web app built as a PWA so it installs to the home screen on phone, tablet, and computer from one codebase. Next.js works well here because it also gives server routes for the OAuth token exchanges that must stay off the client.
-- Data, auth, and sync: Supabase Postgres with Supabase Auth and Row Level Security. This is the standard backend and it makes cross-device sync automatic.
+- Data, auth, and sync: Neon Postgres with Auth.js Google sign-in and server-side data routes. This keeps cross-device sync automatic while staying on a free-friendly Postgres path.
 - Hosting: Vercel, which pairs cleanly with Next.js and is already familiar.
-- Sign in: Supabase Auth with Google sign-in. One tap for Liz, and it doubles as the entry point for the Google permissions used by Drive and Calendar.
+- Sign in: Auth.js with Google sign-in. One tap for Liz, and it keeps Google Drive and Calendar permissions available later as separate, narrow consent steps.
 
 Why a PWA rather than native apps: one codebase covers all three device types, it installs to the home screen and opens full screen, and it avoids app store overhead for a single-user tool. Native email and calendar still open her real device apps through standard links.
 
@@ -17,11 +17,11 @@ Why a PWA rather than native apps: one codebase covers all three device types, i
 
 - Build mobile-first and fully responsive so the same screens feel right on a phone, a tablet, and a laptop.
 - Add a web app manifest and a service worker so she can install it to her home screen and open it offline for reading, with changes syncing when she is back online.
-- All her data lives in Supabase keyed to her account, so signing in on any device shows the same up-to-date circle, places, and notes.
+- All her data lives in Neon Postgres keyed to her Auth.js profile, so signing in on any device shows the same up-to-date circle, places, and notes.
 
 ## 3. Auth and data
 
-- Liz signs in with Google through Supabase Auth.
+- Liz signs in with Google through Auth.js.
 - Every table carries a user_id and Row Level Security so only her account can read or write her rows. The schema file sets this up.
 - The data model is the same one from the prototype and the workbook: people, facilities, captures, and a per-user profile for her settings. The schema also adds a small table to hold OAuth tokens server-side for Drive and LinkedIn.
 
@@ -56,7 +56,7 @@ So in the app, LinkedIn is a posting helper and a quick-open shortcut, not an au
 
 ## 5. Security
 
-- All OAuth client secrets and token exchanges live server-side, in Next.js server routes or Supabase edge functions, never in the browser bundle.
+- All OAuth client secrets and token exchanges live server-side, in Next.js server routes, never in the browser bundle.
 - Store refresh tokens encrypted, tied to her user_id, protected by Row Level Security.
 - Request the narrowest scope that does the job: drive.file, calendar.events, the LinkedIn member social scope, and Gmail send only if added later.
 - Ask for each permission only when she first taps the feature that needs it, not all at once at sign-in. Incremental consent feels calmer and is easier to approve.
@@ -71,7 +71,7 @@ So in the app, LinkedIn is a posting helper and a quick-open shortcut, not an au
 
 Start with the foundation and the safe, native connections, then add the heavier Google API pieces only if she wants them.
 
-- First: the PWA on Vercel, Supabase with the schema and Row Level Security, Google sign-in, native email compose, add-to-calendar files, Google Drive backup, and LinkedIn open and copy-to-post.
+- First: the PWA on Vercel, Neon with the ERB-generated Postgres schema and policy seams, Auth.js Google sign-in, native email compose, add-to-calendar files, Google Drive backup, and LinkedIn open and copy-to-post.
 - Later if wanted: Gmail send and reply reading, Google Calendar direct create and availability, and the LinkedIn member social posting scope so posts publish without leaving the app.
 
 The point of the sequence is that she gets a working, cross-device, connected app early, and the optional depth can come after, without reworking the foundation.

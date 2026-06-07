@@ -87,6 +87,7 @@ export function FacilityForm({
   // Refresh the form each time the sheet opens for a given record.
   useEffect(() => {
     if (!open) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setForm(facility ? fromFacility(facility) : blank);
   }, [open, facility]);
 

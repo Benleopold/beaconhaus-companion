@@ -12,9 +12,11 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { Button, Card, Field, Input, SectionLabel } from "@/components/ui";
+import { SignOutButton } from "@/components/auth-gate";
 import { useProfile } from "@/lib/hooks";
 import { resetAll, updateProfile } from "@/lib/repo";
 import { governance, profile as profileSeed } from "@/lib/rulebook.generated";
+import { isRemoteConfigured } from "@/lib/backend";
 import { cn } from "@/lib/utils";
 import type { Profile } from "@/lib/types";
 
@@ -59,6 +61,7 @@ export default function SettingsPage() {
 
   // Seed local state once the profile arrives.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (profile && draft === null) setDraft(draftFromProfile(profile));
   }, [profile, draft]);
 
@@ -237,36 +240,54 @@ export default function SettingsPage() {
             </span>
             <div>
               <h3 className="font-display text-[17px] leading-snug text-ink">
-                Your circle lives with you
+                {isRemoteConfigured ? "Your circle is backed up privately" : "Your circle lives with you"}
               </h3>
               <p className="mt-1 text-[14px] leading-relaxed text-ink-soft">
-                Everyone you are tending to is kept privately on this device, just for
-                you. Nothing leaves your phone.
+                {isRemoteConfigured
+                  ? "Everyone you are tending to is kept with your account, protected by private row-level access."
+                  : "Everyone you are tending to is kept privately on this device, just for you. Nothing leaves your phone."}
               </p>
             </div>
           </div>
 
-          <div className="mt-4 rounded-2xl bg-surface-2 p-4">
-            <div className="flex items-center gap-2 text-[13px] font-semibold text-beacon-deep">
-              <Cloud className="h-4 w-4" />
-              Coming soon
-            </div>
-            <p className="mt-1.5 text-[14px] leading-relaxed text-ink-soft">
-              Soon you will be able to keep your circle safely backed up and in step
-              across your phone and computer, with a private folder in your own Google
-              Drive.
-            </p>
-            <div className="mt-3.5">
-              <Button variant="soft" disabled aria-label="Connect Google Drive, coming soon">
+          {isRemoteConfigured ? (
+            <div className="mt-4 rounded-2xl bg-surface-2 p-4">
+              <div className="flex items-center gap-2 text-[13px] font-semibold text-beacon-deep">
                 <Cloud className="h-4 w-4" />
-                Connect Google Drive
-              </Button>
+                Cloud sync
+              </div>
+              <p className="mt-1.5 text-[14px] leading-relaxed text-ink-soft">
+                Sign in on another device with the same email and your circle will follow you there.
+              </p>
+              <div className="mt-3.5">
+                <SignOutButton />
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="mt-4 rounded-2xl bg-surface-2 p-4">
+              <div className="flex items-center gap-2 text-[13px] font-semibold text-beacon-deep">
+                <Cloud className="h-4 w-4" />
+                Coming soon
+              </div>
+              <p className="mt-1.5 text-[14px] leading-relaxed text-ink-soft">
+                Soon you will be able to keep your circle safely backed up and in step
+                across your phone and computer, with a private folder in your own Google
+                Drive.
+              </p>
+              <div className="mt-3.5">
+                <Button variant="soft" disabled aria-label="Connect Google Drive, coming soon">
+                  <Cloud className="h-4 w-4" />
+                  Connect Google Drive
+                </Button>
+              </div>
+            </div>
+          )}
 
           <div className="mt-4 border-t border-line-soft pt-4">
             <p className="mb-2.5 text-[13px] leading-relaxed text-ink-faint">
-              Clear everything on this device and return to the starting circle.
+              {isRemoteConfigured
+                ? "Clear your account data and return to the starting circle."
+                : "Clear everything on this device and return to the starting circle."}
             </p>
             {confirmReset ? (
               <div className="flex flex-wrap items-center gap-2">

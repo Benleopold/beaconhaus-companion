@@ -8,7 +8,7 @@ A calm, cross-device companion that helps Liz Imbro run her BeaconHaus outreach 
 
 This project follows the Leopold Loop. The single source of truth is the Airtable rulebook. Everything in this repository below the meaning layer is derivative.
 
-- Do not hand-edit derivative artifacts (the Supabase schema, RLS policies, enum tables, seed, or generated frontend config).
+- Do not hand-edit derivative artifacts (Postgres schema, RLS policies, enum tables, seed, or generated frontend config).
 - To change behavior, change the rulebook, then run `effortless build` to regenerate the derivative outputs.
 - Meaning lives in exactly one place. If a rule or a vocabulary appears in two places, that is a defect to fix, not a convenience to keep.
 
@@ -31,7 +31,7 @@ Stakeholder input (Liz, the calls, Ben)
    (rulebook-to-airtable . airtable-to-rulebook . rulebook-to-postgres)
         |
    Derivative outputs
-   - Supabase tables, views, functions, RLS, seed
+   - Neon/Postgres tables, views, functions, RLS, seed
    - Frontend config (entities, vocabularies, copy, rules)
 ```
 
@@ -43,7 +43,7 @@ A rule change flows from Airtable through the build and rebuilds deterministical
 
 1. Meaning layer (SSOT, Airtable). Entities, fields, controlled vocabularies, governance rules, and curated reference data.
 2. ERB. The rulebook layer that the build reads and writes.
-3. Derivative. The Supabase backend and the frontend, generated from the rulebook. This repo holds the derivative outputs and the app shell.
+3. Derivative. The Neon/Postgres backend and the frontend, generated from the rulebook. This repo holds the derivative outputs and the app shell.
 
 ---
 
@@ -120,7 +120,7 @@ Seed includes Mina, Haley, Pam, and Terry; Mount Alverno and the two unconfirmed
 
 Generated from the rulebook. Do not hand-edit.
 
-- `beaconhaus_schema.sql`: Supabase tables, indexes, updated-at triggers, and Row Level Security, generated from the entities and rules above.
+- `postgres/`: Postgres tables, views, functions, policy seams, and seed data generated from the rulebook.
 - Frontend config: entities, controlled vocabularies, copy, and rule parameters, read from the generated vocabulary and rule set rather than hardcoded.
 - The app shell (PWA) is the only hand-authored layer, and it reads everything meaningful from the generated config.
 
@@ -129,7 +129,7 @@ Generated from the rulebook. Do not hand-edit.
 ## Stack
 
 - Frontend: responsive PWA, installable to the home screen on phone, tablet, and computer.
-- Data, auth, sync: Supabase Postgres, Supabase Auth with Google sign-in, Row Level Security.
+- Data, auth, sync: Neon Postgres, Auth.js with Google sign-in, server-side data routes, and Row Level Security policy seams.
 - Hosting: Vercel.
 - Integrations: native email via device compose links, calendar via add-to-calendar files with an optional Google Calendar events scope, Google Drive via drive.file for backups and saved documents, and LinkedIn limited to official posting and deep links per R10.
 

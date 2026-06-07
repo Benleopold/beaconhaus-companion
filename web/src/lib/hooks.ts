@@ -1,10 +1,8 @@
 "use client";
-import { useLiveQuery } from "dexie-react-hooks";
-import { useEffect, useState } from "react";
-import { db } from "./db";
-import { ensureSeeded } from "./repo";
+import { useCallback, useEffect, useState } from "react";
+import { ensureSeeded, getProfile, listCaptures, listFacilities, listPeople, subscribeRepo } from "./repo";
 import { byColdestFirst } from "./warmth";
-import type { Person } from "./types";
+import type { Capture, Facility, Person, Profile } from "./types";
 
 /** Seed once on the client, then signal readiness. */
 export function useSeed(): boolean {
@@ -19,25 +17,48 @@ export function useSeed(): boolean {
   return ready;
 }
 
-export const usePeople = () =>
-  useLiveQuery(() => db.people.toArray().then((xs) => xs.sort((a, b) => a.fullName.localeCompare(b.fullName))), []);
+function useRepoQuery<T>(loader: () => Promise<T>): T | undefined {
+  const [value, setValue] = useState<T>();
 
-export const useFacilities = () =>
-  useLiveQuery(
-    () => db.facilities.toArray().then((xs) => xs.sort((a, b) => a.facilityName.localeCompare(b.facilityName))),
-    [],
-  );
+  useEffect(() => {
+    let active = true;
+    const load = () => {
+      loader()
+        .then((next) => {
+          if (active) setValue(next);
+        })
+        .catch(() => {
+          if (active) setValue(undefined);
+        });
+    };
 
-export const useCaptures = () =>
-  useLiveQuery(() => db.captures.orderBy("createdAt").reverse().toArray(), []);
+    load();
+    const unsubscribe = subscribeRepo(load);
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [loader]);
 
-export const useProfile = () => useLiveQuery(() => db.profile.toCollection().first(), []);
+  return value;
+}
 
-export const usePerson = (id?: string) => useLiveQuery(() => (id ? db.people.get(id) : undefined), [id]);
+export const usePeople = (): Person[] | undefined => useRepoQuery(listPeople);
+
+export const useFacilities = (): Facility[] | undefined => useRepoQuery(listFacilities);
+
+export const useCaptures = (): Capture[] | undefined => useRepoQuery(listCaptures);
+
+export const useProfile = (): Profile | undefined => useRepoQuery(getProfile);
+
+export const usePerson = (id?: string): Person | undefined => {
+  const loader = useCallback(async () => (id ? (await listPeople()).find((p) => p.id === id) : undefined), [id]);
+  return useRepoQuery(loader);
+};
 
 /** The daily ritual queue (R3): coldest or never-touched first. */
 export function useTodayQueue(count: number): Person[] | undefined {
-  const people = useLiveQuery(() => db.people.toArray(), []);
+  const people = usePeople();
   if (!people) return undefined;
   return [...people].sort(byColdestFirst).slice(0, count);
 }

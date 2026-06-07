@@ -85,6 +85,7 @@ export function PersonForm({
   // Reload the form whenever the sheet opens or the target person changes.
   useEffect(() => {
     if (!open) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setForm(person ? fromPerson(person) : empty);
     setSaving(false);
   }, [open, person]);

@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { getProfile, listCaptures, listFacilities, listPeople } from "@/lib/repo";
 import { computeWarmth } from "@/lib/warmth";
 import type { DataSnapshot, PageContext } from "./types";
 
@@ -8,13 +8,13 @@ const pick = (o: Record<string, unknown>, keys: string[]) => {
   return r;
 };
 
-/** Assemble a compact snapshot of the user's real local data for grounding. */
+/** Assemble a compact snapshot of the user's real data for grounding. */
 export async function buildDataSnapshot(): Promise<DataSnapshot> {
   const [people, facilities, captures, profileRow] = await Promise.all([
-    db.people.toArray(),
-    db.facilities.toArray(),
-    db.captures.toArray(),
-    db.profile.toCollection().first(),
+    listPeople(),
+    listFacilities(),
+    listCaptures(),
+    getProfile(),
   ]);
 
   return {

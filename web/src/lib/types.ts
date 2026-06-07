@@ -54,6 +54,7 @@ export interface Capture {
 }
 
 export interface Profile {
+  id?: string;
   accountKey: string;
   displayName: string;
   tagline: string;

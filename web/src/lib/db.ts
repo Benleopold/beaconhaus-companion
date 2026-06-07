@@ -4,7 +4,7 @@ import type { Chat, ChatMessage } from "./copilot/types";
 
 /**
  * Local-first store (IndexedDB). This is the "local" adapter of a swappable
- * data layer; a Supabase or Google Drive adapter can implement the same repo
+ * data layer; the hosted Postgres adapter implements the same repo
  * surface later without touching the UI. Operations only run in the browser.
  */
 class BeaconDB extends Dexie {

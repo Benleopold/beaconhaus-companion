@@ -13,3 +13,10 @@
 
 -- Your custom data changes will appear here:
 
+-- Before Liz signs in with Google for the first time, add one claim row that
+-- maps her email address to the existing ERB seed profile.
+--
+-- Example:
+-- INSERT INTO beaconhaus_profile_claims (email, account_key)
+-- VALUES ('liz@example.com', 'liz')
+-- ON CONFLICT (email) DO UPDATE SET account_key = EXCLUDED.account_key;

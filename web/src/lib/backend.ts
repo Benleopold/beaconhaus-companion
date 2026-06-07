@@ -1,4 +1,7 @@
-export const isRemoteConfigured = process.env.NEXT_PUBLIC_BEACONHAUS_BACKEND === "neon";
+export const backend = (process.env.NEXT_PUBLIC_BEACONHAUS_BACKEND ?? "").toLowerCase();
+export const isNeonConfigured = backend === "neon";
+export const isSupabaseConfigured = backend === "supabase";
+export const isRemoteConfigured = isNeonConfigured || isSupabaseConfigured;
 
 type ApiOptions = {
   resource?: string;

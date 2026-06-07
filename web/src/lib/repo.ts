@@ -2,7 +2,24 @@ import { db } from "./db";
 import type { Person, Facility, Capture, Profile } from "./types";
 import { seed, profile as profileSeed } from "./rulebook.generated";
 import { nowISO, mondayOf } from "./utils";
-import { apiGet, apiPost, isRemoteConfigured } from "./backend";
+import { apiGet, apiPost, isRemoteConfigured, isSupabaseConfigured, isNeonConfigured } from "./backend";
+import {
+  ensureSupabaseSeeded,
+  getSupabasePerson,
+  getSupabaseProfile,
+  updateSupabaseProfile,
+  listSupabasePeople,
+  saveSupabasePerson,
+  patchSupabasePerson,
+  deleteSupabasePerson,
+  listSupabaseFacilities,
+  saveSupabaseFacility,
+  deleteSupabaseFacility,
+  listSupabaseCaptures,
+  saveSupabaseCapture,
+  deleteSupabaseCapture,
+  resetSupabaseAll,
+} from "./supabase/data";
 
 const OWNER = profileSeed.accountKey;
 type Row = Record<string, unknown>;
@@ -110,7 +127,12 @@ async function ensureRemoteProfile(): Promise<Profile> {
 
 /** Seed the local store from the rulebook's curated reference data, once. */
 export async function ensureSeeded(): Promise<void> {
-  if (isRemoteConfigured) {
+  if (isSupabaseConfigured) {
+    await ensureSupabaseSeeded();
+    notifyRepoChange();
+    return;
+  }
+  if (isNeonConfigured) {
     await ensureRemoteProfile();
     notifyRepoChange();
     return;
@@ -138,7 +160,8 @@ export async function ensureSeeded(): Promise<void> {
 }
 
 export async function getProfile(): Promise<Profile> {
-  if (isRemoteConfigured) return ensureRemoteProfile();
+  if (isSupabaseConfigured) return getSupabaseProfile();
+  if (isNeonConfigured) return ensureRemoteProfile();
 
   const p = await db.profile.get(OWNER);
   return (p ?? {
@@ -155,7 +178,12 @@ export async function getProfile(): Promise<Profile> {
 }
 
 export async function updateProfile(patch: Partial<Profile>): Promise<void> {
-  if (isRemoteConfigured) {
+  if (isSupabaseConfigured) {
+    await updateSupabaseProfile(patch);
+    notifyRepoChange();
+    return;
+  }
+  if (isNeonConfigured) {
     await apiPost({ payload: { op: "updateProfile", patch } });
     notifyRepoChange();
     return;
@@ -171,7 +199,11 @@ async function bumpWeeklyCount(): Promise<void> {
   const prof = await getProfile();
   const thisMonday = mondayOf();
   const weekCount = prof.weekStart === thisMonday ? (prof.weekCount ?? 0) + 1 : 1;
-  if (isRemoteConfigured) {
+  if (isSupabaseConfigured) {
+    await updateSupabaseProfile({ weekStart: thisMonday, weekCount });
+    return;
+  }
+  if (isNeonConfigured) {
     await apiPost({ payload: { op: "updateProfile", patch: { weekStart: thisMonday, weekCount } } });
     return;
   }
@@ -180,7 +212,18 @@ async function bumpWeeklyCount(): Promise<void> {
 
 /** Log a hello (R3): set lastTouched to now, auto-advance status (R7), count it. */
 export async function logHello(id: string): Promise<void> {
-  if (isRemoteConfigured) {
+  if (isSupabaseConfigured) {
+    const person = await getSupabasePerson(id);
+    if (person) {
+      const patch: Partial<Person> = { lastTouched: nowISO(), updatedAt: nowISO() };
+      if (person.status === "to-reach-out") patch.status = "reached-out";
+      await patchSupabasePerson(id, patch);
+    }
+    await bumpWeeklyCount();
+    notifyRepoChange();
+    return;
+  }
+  if (isNeonConfigured) {
     await apiPost({ payload: { op: "logHello", id } });
     notifyRepoChange();
     return;
@@ -197,14 +240,22 @@ export async function logHello(id: string): Promise<void> {
 
 // People -------------------------------------------------------------------
 export async function listPeople(): Promise<Person[]> {
-  if (isRemoteConfigured) {
+  if (isSupabaseConfigured) {
+    return listSupabasePeople();
+  }
+  if (isNeonConfigured) {
     return (await apiGet<Row[]>("people")).map(personFromRow);
   }
   return db.people.toArray().then((xs) => xs.sort((a, b) => a.fullName.localeCompare(b.fullName)));
 }
 
 export async function savePerson(input: Partial<Person> & { fullName: string }): Promise<string> {
-  if (isRemoteConfigured) {
+  if (isSupabaseConfigured) {
+    const id = await saveSupabasePerson(input);
+    notifyRepoChange();
+    return id;
+  }
+  if (isNeonConfigured) {
     const { id } = await apiPost<{ id: string }>({ payload: { op: "savePerson", input } });
     notifyRepoChange();
     return id;
@@ -231,7 +282,12 @@ export async function savePerson(input: Partial<Person> & { fullName: string }):
 }
 
 export async function deletePerson(id: string): Promise<void> {
-  if (isRemoteConfigured) {
+  if (isSupabaseConfigured) {
+    await deleteSupabasePerson(id);
+    notifyRepoChange();
+    return;
+  }
+  if (isNeonConfigured) {
     await apiPost({ payload: { op: "deletePerson", id } });
     notifyRepoChange();
     return;
@@ -242,14 +298,22 @@ export async function deletePerson(id: string): Promise<void> {
 
 // Facilities ---------------------------------------------------------------
 export async function listFacilities(): Promise<Facility[]> {
-  if (isRemoteConfigured) {
+  if (isSupabaseConfigured) {
+    return listSupabaseFacilities();
+  }
+  if (isNeonConfigured) {
     return (await apiGet<Row[]>("facilities")).map(facilityFromRow);
   }
   return db.facilities.toArray().then((xs) => xs.sort((a, b) => a.facilityName.localeCompare(b.facilityName)));
 }
 
 export async function saveFacility(input: Partial<Facility> & { facilityName: string }): Promise<string> {
-  if (isRemoteConfigured) {
+  if (isSupabaseConfigured) {
+    const id = await saveSupabaseFacility(input);
+    notifyRepoChange();
+    return id;
+  }
+  if (isNeonConfigured) {
     const { id } = await apiPost<{ id: string }>({ payload: { op: "saveFacility", input } });
     notifyRepoChange();
     return id;
@@ -276,7 +340,12 @@ export async function saveFacility(input: Partial<Facility> & { facilityName: st
 }
 
 export async function deleteFacility(id: string): Promise<void> {
-  if (isRemoteConfigured) {
+  if (isSupabaseConfigured) {
+    await deleteSupabaseFacility(id);
+    notifyRepoChange();
+    return;
+  }
+  if (isNeonConfigured) {
     await apiPost({ payload: { op: "deleteFacility", id } });
     notifyRepoChange();
     return;
@@ -287,14 +356,22 @@ export async function deleteFacility(id: string): Promise<void> {
 
 // Captures -----------------------------------------------------------------
 export async function listCaptures(): Promise<Capture[]> {
-  if (isRemoteConfigured) {
+  if (isSupabaseConfigured) {
+    return listSupabaseCaptures();
+  }
+  if (isNeonConfigured) {
     return (await apiGet<Row[]>("captures")).map(captureFromRow);
   }
   return db.captures.orderBy("createdAt").reverse().toArray();
 }
 
 export async function saveCapture(input: Partial<Capture> & { title: string }): Promise<string> {
-  if (isRemoteConfigured) {
+  if (isSupabaseConfigured) {
+    const id = await saveSupabaseCapture(input);
+    notifyRepoChange();
+    return id;
+  }
+  if (isNeonConfigured) {
     const { id } = await apiPost<{ id: string }>({ payload: { op: "saveCapture", input } });
     notifyRepoChange();
     return id;
@@ -314,7 +391,12 @@ export async function saveCapture(input: Partial<Capture> & { title: string }): 
 }
 
 export async function deleteCapture(id: string): Promise<void> {
-  if (isRemoteConfigured) {
+  if (isSupabaseConfigured) {
+    await deleteSupabaseCapture(id);
+    notifyRepoChange();
+    return;
+  }
+  if (isNeonConfigured) {
     await apiPost({ payload: { op: "deleteCapture", id } });
     notifyRepoChange();
     return;
@@ -326,7 +408,12 @@ export async function deleteCapture(id: string): Promise<void> {
 // Reset --------------------------------------------------------------------
 /** Wipe all local data and re-seed the starting circle from the rulebook. */
 export async function resetAll(): Promise<void> {
-  if (isRemoteConfigured) {
+  if (isSupabaseConfigured) {
+    await resetSupabaseAll();
+    notifyRepoChange();
+    return;
+  }
+  if (isNeonConfigured) {
     await apiPost({ payload: { op: "resetAll" } });
     notifyRepoChange();
     return;
